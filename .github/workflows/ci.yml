@@ -29,7 +29,7 @@ jobs:
         working-directory: .compiler
         run: cargo build --release -p tn-cli
       - name: Verify compiler boundary
-        run: scripts/verify-compiler-boundary.sh .compiler
+        run: sh scripts/verify-compiler-boundary.sh .compiler
       - name: Build pinned Yoga
         run: scripts/check-yoga.sh
       - name: Check formatting
