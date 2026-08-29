@@ -1,0 +1,52 @@
+import { Array } from "std/collections";
+import { log } from "std/console";
+import { exit } from "std/process";
+import { button, createTextNode, stack, window } from "./src/components";
+import { Style, styleSetGap, styleSetPadding } from "./src/core/types";
+import { Element } from "./src/jsx-runtime";
+import { NativeRenderer } from "./src/platform/macos";
+import { renderTree } from "./src/reconciler/reconciler";
+
+function sayHello(): void {
+  log("TypeNative UI: hello from the native button");
+}
+function describeRuntime(): void {
+  log("TypeNative UI: this click traveled through AppKit into TypeNative");
+}
+function quit(): void {
+  log("TypeNative UI: goodbye");
+  exit(0);
+}
+function content(): Element {
+  const children = new Array<Element>({
+    capacity: 6
+  });
+  children.push(createTextNode("TypeNative UI"));
+  children.push(createTextNode("A small native desktop interface written in TypeNative."));
+  children.push(createTextNode("Click a button to send an AppKit event back to TypeNative."));
+  children.push(button("Say hello", sayHello));
+  children.push(button("Explain the event path", describeRuntime));
+  children.push(button("Quit", quit));
+  const style = new Style();
+  styleSetPadding( &mut style, 24.0f32);
+  styleSetGap( &mut style, 12.0f32);
+  return stack( &style, move children);
+}
+function main(): i32 {
+  const renderer = new NativeRenderer();
+  if (!renderer.start()) {
+    log("TypeNative UI: AppKit could not start");
+    return 1;
+  }
+  const root = renderTree(window("TypeNative UI Demo", content()));
+  if (!renderer.mount(move root, "TypeNative UI Demo")) {
+    log("TypeNative UI: window mount failed");
+    renderer.stop();
+    return 2;
+  }
+  log("TypeNative UI: window is open; click the buttons or Quit");
+  renderer.run();
+  renderer.closeWindow();
+  renderer.stop();
+  return 0;
+}
