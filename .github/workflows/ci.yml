@@ -17,6 +17,12 @@ jobs:
           repository: Ohanronnie/typenative
           ref: 3ef10d4579e1c0765ad56fe787db37b9bdcb4c1a
           path: .compiler
+      - name: Install LLVM 22.1.8
+        run: |
+          brew install llvm@22
+          llvm_prefix="$(brew --prefix llvm@22)"
+          test "$("$llvm_prefix/bin/llvm-config" --version)" = "22.1.8"
+          echo "LLVM_SYS_221_PREFIX=$llvm_prefix" >> "$GITHUB_ENV"
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Build TypeNative compiler
