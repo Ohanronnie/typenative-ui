@@ -79,7 +79,7 @@ build_and_run() {
 }
 
 cd "$root"
-run_timed format "$compiler" fmt --check .
+run_timed format "$compiler" fmt --check src examples testing benchmarks
 run_timed check "$compiler" check typenative.json --timings
 run_timed lint "$compiler" lint . --json
 run_timed yoga sh scripts/check-yoga.sh
