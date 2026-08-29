@@ -1,0 +1,97 @@
+import { Disposable } from "std/core";
+import { batch, clearHooks, flushLayoutEffects, flushPassiveEffects } from "../hooks/hooks";
+import { clearFocus, dispatchPress, Element, focusElement, hostChildAt, hostChildCount, isFocused } from "../jsx-runtime";
+import { Reconciler, renderTree } from "../reconciler/reconciler";
+
+export class HeadlessRenderer implements Disposable {
+  private reconciler: Reconciler;
+  public constructor() {
+    this.reconciler = new Reconciler();
+  }
+  public mount(root: Element): void {
+    this.reconciler.mount(renderTree(move root));
+    flushLayoutEffects();
+    flushPassiveEffects();
+  }
+  public update(root: Element): void {
+    this.reconciler.update(renderTree(move root));
+    flushLayoutEffects();
+    flushPassiveEffects();
+  }
+  public unmount(): void {
+    this.reconciler.unmount();
+    clearFocus();
+    clearHooks();
+  }
+  public [Symbol.dispose](): void {
+    this.unmount();
+  }
+  public mutationCount(): usize {
+    return this.reconciler.mutationCount();
+  }
+  public lastMutationKind(): i32 {
+    return this.reconciler.lastMutationKind();
+  }
+  public mutationAt(index: usize): i32 {
+    const mutation = this.reconciler.mutationAt(index);
+    if (mutation === undefined) {
+      return 0;
+    }
+    return mutation!.kind;
+  }
+  public nodeCount(): usize {
+    return this.reconciler.nodeCount();
+  }
+  public rootElement(): Element {
+    return this.reconciler.rootElement();
+  }
+  public simulatePress(element: Element): void {
+    batch(move(): void => {
+      dispatchPress(element);
+    });
+  }
+  public focus(element: Element): void {
+    focusElement(element);
+  }
+  public isFocused(element: Element): bool {
+    return isFocused(element);
+  }
+  public queryFirst(kind: i32): Element | undefined {
+    if (!this.reconciler.isMounted()) {
+      return undefined;
+    }
+    return findFirst(this.reconciler.rootElement(), kind);
+  }
+  public accessibilityRole(element: Element): i32 {
+    if (element.kind() === 5i32) {
+      return 1;
+    }
+    if (element.kind() === 4i32) {
+      return 4;
+    }
+    if (element.kind() === 3i32) {
+      return 3;
+    }
+    return 2;
+  }
+  public accessibilityLabelLength(element: Element): usize {
+    return element.textLength();
+  }
+}
+function findFirst(element: Element, kind: i32): Element | undefined {
+  if (element.kind() === kind) {
+    return element;
+  }
+  let index: usize = 0;
+  while (index<hostChildCount(element)) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined) {
+      const found = findFirst(child!, kind);
+      if (found !== undefined) {
+        return found;
+      }
+    }
+    index = index + 1usize;
+  }
+  return undefined;
+}

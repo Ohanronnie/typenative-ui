@@ -1,0 +1,274 @@
+import { runI32, TaskGroup } from "std/async";
+import { Array } from "std/collections";
+import { String } from "std/string";
+import { Button, Text, View, Window } from "../../../src/components";
+import { EmptyProps } from "../../../src/core/types";
+import { clearHooks, Context, createContext, flushLayoutEffects, flushPassiveEffects, useCallback, useContext, useEffect, useId, useIntReducer, useLayoutEffect, useMemo, useRef, useState, Cleanup } from "../../../src/hooks/hooks";
+import { Element, createKeyedText, fragmentElements, hostChildAt, hostChildCount, kindButton, kindText } from "../../../src/jsx-runtime";
+import { createNativeRenderer, NativeRenderer } from "../../../src/platform/macos";
+import { mutationMove } from "../../../src/reconciler/mutations";
+import { renderTree } from "../../../src/reconciler/reconciler";
+import { HeadlessRenderer } from "../../../src/renderer/headless";
+import { Priority, UiScheduler } from "../../../src/scheduler/scheduler";
+
+static mut layoutRuns: i32 = 0;
+static mut passiveRuns: i32 = 0;
+static mut layoutCleanups: i32 = 0;
+static mut passiveCleanups: i32 = 0;
+static mut effectOrder: i32 = 0;
+static mut latestCount: i32 = 0;
+static mut latestReduced: i32 = 0;
+static mut latestTheme: i32 = 0;
+static mut stableIdentifier: u64 = 0;
+static mut latestIdentifier: u64 = 0;
+static mut latestRef: i32 = 0;
+static mut backgroundPosted: i32 = 0;
+function rawWindowHandle(renderer: &NativeRenderer): *mut u8 {
+  unsafe {
+    return renderer.windowHandle();
+  }
+}
+function layoutCleanup(): void {
+  unsafe {
+    layoutCleanups = layoutCleanups + 1i32;
+  }
+}
+function passiveCleanup(): void {
+  unsafe {
+    passiveCleanups = passiveCleanups + 1i32;
+  }
+}
+function layoutEffect(): Cleanup {
+  unsafe {
+    layoutRuns = layoutRuns + 1i32;
+    effectOrder = effectOrder * 10i32 + 1i32;
+  }
+  return layoutCleanup;
+}
+function passiveEffect(): Cleanup {
+  unsafe {
+    passiveRuns = passiveRuns + 1i32;
+    effectOrder = effectOrder * 10i32 + 2i32;
+  }
+  return passiveCleanup;
+}
+function addReducer(value: i32, action: i32): i32 {
+  return value + action;
+}
+struct ToolbarProps {
+  public action: () => void;
+}
+function Toolbar(props: ToolbarProps): Element {
+  const action = move(): void => {
+    props.action();
+  };
+  return <Button onPress={action}>Increment</Button>;
+}
+struct CounterProps {
+  public context: &Context<i32>;
+}
+function Counter(props: CounterProps): Element {
+  const state = useState<i32>(0i32);
+  const reduced = useIntReducer(addReducer, 0i32);
+  const current = state.current();
+  const theme = useContext<i32>(props.context);
+  const reference = useRef<i32>(0i32);
+  reference.write(current);
+  const referenceValue = reference.read();
+  const identifier = useId();
+  const increment = move(): void => {
+    state.set(state.current() + 1i32);
+    reduced.dispatch(addReducer, 1i32);
+  };
+  const callback = useCallback(increment, 1u64);
+  useLayoutEffect(layoutEffect, 1u64);
+  useEffect(passiveEffect, 1u64);
+  const reducedValue = reduced.current();
+  const memoizedCount = useMemo<i32>(move(): i32 => current, current === 0i32?0u64: 1u64);
+  unsafe {
+    latestCount = current;
+    latestReduced = reducedValue;
+    latestTheme = theme;
+    latestRef = referenceValue;
+    latestIdentifier = identifier;
+    if (stableIdentifier === 0u64) {
+      stableIdentifier = identifier;
+    }
+  }
+  let label: &str = "Count: 0";
+  if (memoizedCount !== 0i32) {
+    label = "Count: 1";
+  }
+  let reducedLabel: &str = "Reducer: 0";
+  if (reducedValue !== 0i32) {
+    reducedLabel = "Reducer: 1";
+  }
+  return <View>
+    <Text>
+      {
+        String(label)}
+      </Text>
+      <Text>
+        {
+          String(reducedLabel)}
+        </Text>
+        <Toolbar action={callback} />
+      </View>;
+    }
+    function KeyedPreview(props: EmptyProps): Element {
+      return <View>
+        <Text>
+          {
+            String("Keyed children")}
+          </Text>
+        </View>;
+      }
+      struct AppProps {
+        public context: &Context<i32>;
+      }
+      function App(props: AppProps): Element {
+        return <Window title="TypeNative Workbench">
+          <View>
+            <Counter context={props.context} /><KeyedPreview />
+          </View>
+        </Window>;
+      }
+      function appTree(context: &Context<i32 >): Element {
+        return <App context={context} />;
+      }
+      function keyedTree(reversed: bool): Element {
+        const children = new Array<Element>({
+          capacity: 2usize,
+        });
+        if (reversed) {
+          children.push(createKeyedText("second", "Second"));
+          children.push(createKeyedText("first", "First"));
+        } else {
+          children.push(createKeyedText("first", "First"));
+          children.push(createKeyedText("second", "Second"));
+        }
+        return fragmentElements(move children);
+      }
+      function findFirst(element: Element, kind: i32): Element | undefined {
+        if (element.kind() === kind) {
+          return element;
+        }
+        let index: usize = 0;
+        while (index<hostChildCount(element)) {
+          const child = hostChildAt(element, index);
+          if (child !== undefined) {
+            const found = findFirst(child!, kind);
+            if (found !== undefined) {
+              return found;
+            }
+          }
+          index = index + 1;
+        }
+        return undefined;
+      }
+      async function backgroundValue(): Promise<i32, never> {
+        return 42i32;
+      }
+      async function backgroundPost(): Promise<i32, never> {
+        await using group = new TaskGroup();
+        const task = group.spawn(backgroundValue());
+        const value = await task;
+        return value;
+      }
+      function main(): i32 {
+        const context = createContext<i32>(7i32);
+        const backgroundValueResult = runI32(backgroundPost());
+        using uiScheduler = new UiScheduler(4usize);
+        if (!uiScheduler.post(Priority.Normal, move(): void => {
+          unsafe {
+            backgroundPosted = backgroundPosted + 1i32;
+          }
+        })) {
+          return 9;
+        }
+        if (uiScheduler.drain(4usize) !== 1usize) {
+          return 8;
+        }
+        let backgroundCompleted = false;
+        unsafe {
+          backgroundCompleted = backgroundPosted === 1i32;
+        }
+        if (backgroundValueResult !== 42i32 || !backgroundCompleted) {
+          return 10;
+        }
+        const headless = new HeadlessRenderer();
+        headless.mount(keyedTree(false));
+        headless.update(keyedTree(true));
+        if (headless.mutationCount() === 0usize) {
+          return 110;
+        }
+        if (headless.mutationCount() === 1usize) {
+          return 111;
+        }
+        if (headless.mutationCount() === 3usize) {
+          return 113;
+        }
+        if (headless.mutationCount() !== 2usize) {
+          return 119;
+        }
+        if (headless.lastMutationKind() !== mutationMove()) {
+          return 101;
+        }
+        const keyedMove = headless.lastMutationKind() === mutationMove();
+        headless.unmount();
+        if (!keyedMove) {
+          return 11;
+        }
+        const native = createNativeRenderer();
+        if (!native.start()) {
+          return 20;
+        }
+        const first = renderTree(appTree( &context));
+        flushLayoutEffects();
+        flushPassiveEffects();
+        const button = findFirst(first, kindButton());
+        if (button === undefined) {
+          clearHooks();
+          native.stop();
+          return 22;
+        }
+        if (!native.mount(move first, "TypeNative Workbench")) {
+          clearHooks();
+          native.stop();
+          return 21;
+        }
+        const windowHandle = rawWindowHandle( &native);
+        native.simulatePress(button!);
+        const second = renderTree(appTree( &context));
+        flushLayoutEffects();
+        flushPassiveEffects();
+        const text = findFirst(second, kindText());
+        let changed = false;
+        if (text !== undefined) {
+          changed = text!.textLength() === 8usize;
+        }
+        if (!native.update(move second)) {
+          native.closeWindow();
+          clearHooks();
+          native.stop();
+          return 23;
+        }
+        let valid = false;
+        unsafe {
+          valid = changed && latestCount === 1i32 && latestReduced === 1i32 && latestTheme === 7i32 && latestRef === 1i32 && stableIdentifier === latestIdentifier && layoutRuns === 1i32 && passiveRuns === 1i32 && effectOrder === 12i32 && native.hasWindow() && native.windowHandle() === windowHandle;
+        }
+        native.closeWindow();
+        clearHooks();
+        native.stop();
+        if (!valid) {
+          return 24;
+        }
+        let cleanupsValid = false;
+        unsafe {
+          cleanupsValid = layoutCleanups === 1i32 && passiveCleanups === 1i32;
+        }
+        if (!cleanupsValid) {
+          return 25;
+        }
+        return 0;
+      }

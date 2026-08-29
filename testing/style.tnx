@@ -1,0 +1,29 @@
+import { Text, styledView } from "../src/components";
+import { EmptyProps, Style, styleSetHeight, styleSetPadding, styleSetWidth } from "../src/core/types";
+import { Element, hostChildAt } from "../src/jsx-runtime";
+import { renderTree } from "../src/reconciler/reconciler";
+
+function Root(props: EmptyProps): Element {
+  const style = new Style();
+  styleSetWidth( &mut style, 120.0f32);
+  styleSetHeight( &mut style, 80.0f32);
+  styleSetPadding( &mut style, 4.0f32);
+  const child = Text({
+    children: "ok",
+  });
+  return styledView( &style, move child);
+}
+function main(): i32 {
+  const root = renderTree(<Root />);
+  const content = hostChildAt(root, 0usize);
+  if (!root.hasStyle() || root.styleSnapshot().width !== 120.0f32 || root.styleSnapshot().height !== 80.0f32 || root.styleSnapshot().padding !== 4.0f32) {
+    root.dispose();
+    return 10;
+  }
+  if (content === undefined || content!.textLength() !== 2usize) {
+    root.dispose();
+    return 11;
+  }
+  root.dispose();
+  return 0;
+}

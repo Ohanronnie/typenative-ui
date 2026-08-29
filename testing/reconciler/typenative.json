@@ -1,0 +1,4 @@
+{
+  "entry": "../reconciler-probe.tn",
+  "target": "aarch64-apple-darwin"
+}

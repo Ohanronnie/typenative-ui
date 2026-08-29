@@ -1,0 +1,9 @@
+{
+  "entry": "../layout.tn",
+  "target": "aarch64-apple-darwin",
+  "link": {
+    "libraries": ["yogacore"],
+    "searchPaths": [".cache/yoga/build-core"],
+    "arguments": ["-lc++"]
+  }
+}

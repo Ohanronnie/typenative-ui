@@ -1,0 +1,36 @@
+import { View } from "../src/components";
+import { EmptyProps } from "../src/core/types";
+import { createText, Element, hostChildAt } from "../src/jsx-runtime";
+import { renderTree } from "../src/reconciler/reconciler";
+
+function A(props: EmptyProps): Element {
+  return createText("a");
+}
+function B(props: EmptyProps): Element {
+  return createText("b");
+}
+function Root(props: EmptyProps): Element {
+  return <View>
+    <A /><B />
+  </View>;
+}
+function main(): i32 {
+  const rendered = renderTree(<Root />);
+  const count = rendered.childCount();
+  const child = hostChildAt(rendered, 0usize);
+  let nestedCount = 0usize;
+  if (child !== undefined) {
+    nestedCount = child!.childCount();
+  }
+  rendered.dispose();
+  if (count !== 1usize) {
+    return 10;
+  }
+  if (nestedCount !== 2usize) {
+    return 20;
+  }
+  if (count === 1usize && nestedCount === 2usize) {
+    return 0;
+  }
+  return 1;
+}

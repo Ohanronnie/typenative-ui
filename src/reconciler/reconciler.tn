@@ -1,0 +1,411 @@
+import { nullPointer, rawAlloc, rawFree, u64ToUsize } from "std/alloc";
+import { Array } from "std/collections";
+import { Disposable } from "std/core";
+import { c_size } from "std/ffi";
+import { beginHookPass, finishHookPass } from "../hooks/hooks";
+import { disposeRaw, Element, hostChildAt, hostChildCount, hostSetChild, kindFunction, leaf } from "../jsx-runtime";
+import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "./mutations";
+
+declare extern "C" {
+  function tn_bytes_read_u8(bytes: *const u8, length: c_size, index: c_size, value: *mut u8): i32;
+  function tn_bytes_write_u8(bytes: *mut u8, length: c_size, index: c_size, value: u8): i32;
+  function tn_bytes_copy_at(source: *const u8, length: c_size, offset: c_size, count: c_size, destination: *mut u8): i32;
+  function tn_bytes_copy_to_at(source: *const u8, sourceLength: c_size, sourceOffset: c_size, count: c_size, destination: *mut u8, destinationLength: c_size, destinationOffset: c_size): i32;
+}
+function nullRaw(): *mut u8 {
+  unsafe {
+    return nullPointer<u8>();
+  }
+}
+struct KeyIndex {
+  public keys: *mut u8;
+  public values: *mut u8;
+  public states: *mut u8;
+  public capacity: usize;
+  public mask: usize;
+}
+function emptyKeyIndex(): KeyIndex {
+  return {
+    keys: nullRaw(), values: nullRaw(), states: nullRaw(), capacity: 0usize, mask: 0usize,
+  };
+}
+function newKeyIndex(minimum: usize): KeyIndex {
+  let capacity = 8usize;
+  while (capacity<minimum) {
+    capacity = capacity * 2usize;
+  }
+  let keys: *mut u8 = nullRaw();
+  let values: *mut u8 = nullRaw();
+  let states: *mut u8 = nullRaw();
+  unsafe {
+    keys = rawAlloc(capacity * 8usize);
+    values = rawAlloc(capacity * 8usize);
+    states = rawAlloc(capacity);
+    let index: usize = 0;
+    while (index<capacity) {
+      tn_bytes_write_u8(states, capacity as c_size, index as c_size, 0u8);
+      index = index + 1usize;
+    }
+  }
+  return {
+    keys: keys, values: values, states: states, capacity: capacity, mask: capacity - 1usize,
+  };
+}
+function keyIndexHash(key: u64): usize {
+  const mixed = key ^(key / 4294967296u64);
+  return u64ToUsize(mixed);
+}
+function keyIndexState(table: &KeyIndex, index: usize): u8 {
+  let state = 0u8;
+  unsafe {
+    tn_bytes_read_u8(table.states as *const u8, table.capacity as c_size, index as c_size,( &mut state)as *mut u8);
+  }
+  return state;
+}
+function keyIndexKey(table: &KeyIndex, index: usize): u64 {
+  let key = 0u64;
+  unsafe {
+    tn_bytes_copy_at(table.keys as *const u8, table.capacity * 8usize as c_size, index * 8usize as c_size, 8 as c_size,( &mut key)as *mut u8);
+  }
+  return key;
+}
+function keyIndexValue(table: &KeyIndex, index: usize): usize {
+  let value = 0usize;
+  unsafe {
+    tn_bytes_copy_at(table.values as *const u8, table.capacity * 8usize as c_size, index * 8usize as c_size, 8 as c_size,( &mut value)as *mut u8);
+  }
+  return value;
+}
+function keyIndexSlot(table: &KeyIndex, key: u64): usize {
+  if (table.capacity === 0usize) {
+    return table.capacity;
+  }
+  let index = keyIndexHash(key) & table.mask;
+  let probes = 0usize;
+  while (probes<table.capacity) {
+    const state = keyIndexState(table, index);
+    if (state === 0u8 || keyIndexKey(table, index) === key) {
+      return index;
+    }
+    index =(index + 1usize) & table.mask;
+    probes = probes + 1usize;
+  }
+  return table.capacity;
+}
+function keyIndexInsert(table: &mut KeyIndex, key: u64, value: usize): void {
+  const index = keyIndexSlot(table, key);
+  if (index === table.capacity) {
+    return;
+  }
+  unsafe {
+    const keyValue = key;
+    const indexValue = value;
+    tn_bytes_copy_to_at(( &keyValue)as *const u8, 8 as c_size, 0, 8 as c_size, table.keys,(table.capacity * 8usize)as c_size,(index * 8usize)as c_size);
+    tn_bytes_copy_to_at(( &indexValue)as *const u8, 8 as c_size, 0, 8 as c_size, table.values,(table.capacity * 8usize)as c_size,(index * 8usize)as c_size);
+    tn_bytes_write_u8(table.states, table.capacity as c_size, index as c_size, 1u8);
+  }
+}
+function keyIndexGet(table: &KeyIndex, key: u64): usize | undefined {
+  if (table.capacity === 0usize) {
+    return undefined;
+  }
+  let index = keyIndexHash(key) & table.mask;
+  let probes = 0usize;
+  while (probes<table.capacity) {
+    const state = keyIndexState(table, index);
+    if (state === 0u8) {
+      return undefined;
+    }
+    if (keyIndexKey(table, index) === key) {
+      return keyIndexValue(table, index);
+    }
+    index =(index + 1usize) & table.mask;
+    probes = probes + 1usize;
+  }
+  return undefined;
+}
+function disposeKeyIndex(table: &mut KeyIndex): void {
+  if (table.capacity > 0usize) {
+    unsafe {
+      rawFree(table.keys);
+      rawFree(table.values);
+      rawFree(table.states);
+    }
+  }
+  table.keys = nullRaw();
+  table.values = nullRaw();
+  table.states = nullRaw();
+  table.capacity = 0usize;
+  table.mask = 0usize;
+}
+export class Reconciler implements Disposable {
+  private root: *mut u8;
+  private mounted: bool;
+  private nextId: i32;
+  private nodes: Array<i32>;
+  private mutations: Array<Mutation>;
+  public constructor() {
+    unsafe {
+      this.root = nullRaw();
+    }
+    this.mounted = false;
+    this.nextId = 0i32;
+    this.nodes = new Array<i32>({
+      capacity: 0
+    });
+    this.mutations = new Array<Mutation>({
+      capacity: 0
+    });
+  }
+  public mount(element: Element): void {
+    let pointer: *mut u8 = nullRaw();
+    unsafe {
+      pointer = element.takeRawForRuntime();
+    }
+    if (pointer === nullRaw()) {
+      this.unmount();
+      return;
+    }
+    if (this.mounted) {
+      this.unmount();
+    }
+    unsafe {
+      this.root = pointer;
+    }
+    this.mounted = true;
+    this.resetSnapshot();
+    unsafe {
+      this.snapshot(Element.fromRaw(pointer), - 1i32, 0usize, true);
+    }
+  }
+  public update(element: Element): void {
+    let nextPointer: *mut u8 = nullRaw();
+    unsafe {
+      nextPointer = element.takeRawForRuntime();
+    }
+    if (nextPointer === nullRaw()) {
+      return;
+    }
+    if (!this.mounted) {
+      unsafe {
+        this.root = nextPointer;
+      }
+      this.mounted = true;
+      this.resetSnapshot();
+      unsafe {
+        this.snapshot(Element.fromRaw(nextPointer), - 1i32, 0usize, true);
+      }
+      return;
+    }
+    unsafe {
+      const previous = Element.fromRaw(this.root);
+      const next = Element.fromRaw(nextPointer);
+      this.mutations.clear();
+      diffTree(previous, next, 0i32, - 1i32, 0usize, &mut this.mutations);
+      disposeRaw(this.root);
+      this.root = nextPointer;
+      this.nodes.clear();
+      this.nextId = 0i32;
+      this.snapshot(next, - 1i32, 0usize, false);
+    }
+  }
+  public unmount(): void {
+    if (this.root !== nullRaw()) {
+      unsafe {
+        disposeRaw(this.root);
+        this.root = nullRaw();
+      }
+    }
+    this.mounted = false;
+    this.nodes.clear();
+    this.mutations.clear();
+    this.nextId = 0i32;
+  }
+  public [Symbol.dispose](): void {
+    this.unmount();
+  }
+  public rootElement(): Element {
+    if (!this.mounted) {
+      return leaf();
+    }
+    unsafe {
+      return Element.fromRaw(this.root);
+    }
+  }
+  public mutationCount(): usize {
+    return this.mutations.length;
+  }
+  public lastMutationKind(): i32 {
+    if (this.mutations.length === 0usize) {
+      return 0;
+    }
+    const mutation = this.mutations.at(this.mutations.length - 1usize);
+    if (mutation === undefined) {
+      return 0;
+    }
+    return mutation!.kind;
+  }
+  public mutationAt(index: usize): Mutation | undefined {
+    const mutation = this.mutations.at(index);
+    if (mutation === undefined) {
+      return undefined;
+    }
+    return {
+      kind: mutation!.kind, nodeId: mutation!.nodeId, parentId: mutation!.parentId, fromIndex: mutation!.fromIndex, toIndex: mutation!.toIndex,
+    };
+  }
+  public isMounted(): bool {
+    return this.mounted;
+  }
+  public nodeCount(): usize {
+    return this.nodes.length;
+  }
+  private resetSnapshot(): void {
+    this.nodes.clear();
+    this.mutations.clear();
+    this.nextId = 0i32;
+  }
+  private snapshot(element: Element, parent: i32, index: usize, emit: bool): i32 {
+    const id = this.nextId;
+    this.nextId = this.nextId + 1i32;
+    this.nodes.push(id);
+    if (emit) {
+      this.mutations.push({
+        kind: mutationCreate(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
+      });
+    }
+    let childIndex: usize = 0;
+    while (childIndex<hostChildCount(element)) {
+      const child = hostChildAt(element, childIndex);
+      if (child !== undefined) {
+        this.snapshot(child!, id, childIndex, emit);
+      }
+      childIndex = childIndex + 1usize;
+    }
+    return id;
+  }
+}
+export function resolveTree(element: Element): Element {
+  let current = move element;
+  while (current.kind() === kindFunction()) {
+    current = current.renderNow();
+  }
+  let index: usize = 0;
+  while (index<hostChildCount(current)) {
+    const child = hostChildAt(current, index);
+    if (child !== undefined) {
+      const resolved = resolveTree(child!);
+      hostSetChild(current, index, move resolved);
+    }
+    index = index + 1usize;
+  }
+  return move current;
+}
+export function renderTree(element: Element): Element {
+  beginHookPass();
+  const resolved = resolveTree(move element);
+  finishHookPass();
+  return move resolved;
+}
+function sameNode(previous: Element, next: Element): bool {
+  return previous.kind() === next.kind() && previous.typeId() === next.typeId() && previous.keyId() === next.keyId();
+}
+function hasKeyedChildren(parent: Element): bool {
+  let cursor: usize = 0;
+  while (cursor<hostChildCount(parent)) {
+    const child = hostChildAt(parent, cursor);
+    if (child !== undefined && child!.keyId() !== 0u64) {
+      return true;
+    }
+    cursor = cursor + 1usize;
+  }
+  return false;
+}
+function matchingChild(previous: Element, next: Element, index: usize, keyIndex: &KeyIndex): usize | undefined {
+  if (next.keyId() === 0u64) {
+    if (index<hostChildCount(previous)) {
+      return index;
+    }
+    return undefined;
+  }
+  return keyIndexGet(keyIndex, next.keyId());
+}
+function diffTree(previous: Element, next: Element, nodeId: i32, parentId: i32, index: usize, mutations: &mut Array<Mutation >): void {
+  if (!sameNode(previous, next)) {
+    mutations.push({
+      kind: mutationReplace(), nodeId: nodeId, parentId: parentId, fromIndex: index, toIndex: index,
+    });
+    return;
+  }
+  if (previous.revision() !== next.revision() || previous.textLength() !== next.textLength() || previous.textHash() !== next.textHash()) {
+    mutations.push({
+      kind: mutationUpdate(), nodeId: nodeId, parentId: parentId, fromIndex: index, toIndex: index,
+    });
+  }
+  if (hostChildCount(previous) === 0usize && hostChildCount(next) === 0usize) {
+    return;
+  }
+  let previousKeyIndex = emptyKeyIndex();
+  let nextKeyIndex = emptyKeyIndex();
+  if (hasKeyedChildren(previous)) {
+    previousKeyIndex = newKeyIndex(hostChildCount(previous) * 2usize);
+  }
+  if (hasKeyedChildren(next)) {
+    nextKeyIndex = newKeyIndex(hostChildCount(next) * 2usize);
+  }
+  let mapIndex: usize = 0;
+  while (mapIndex<hostChildCount(previous)) {
+    const mappedChild = hostChildAt(previous, mapIndex);
+    if (mappedChild !== undefined && mappedChild!.keyId() !== 0u64) {
+      keyIndexInsert( &mut previousKeyIndex, mappedChild!.keyId(), mapIndex);
+    }
+    mapIndex = mapIndex + 1usize;
+  }
+  mapIndex = 0usize;
+  while (mapIndex<hostChildCount(next)) {
+    const mappedChild = hostChildAt(next, mapIndex);
+    if (mappedChild !== undefined && mappedChild!.keyId() !== 0u64) {
+      keyIndexInsert( &mut nextKeyIndex, mappedChild!.keyId(), mapIndex);
+    }
+    mapIndex = mapIndex + 1usize;
+  }
+  let nextIndex: usize = 0;
+  while (nextIndex<hostChildCount(next)) {
+    const nextChild = hostChildAt(next, nextIndex);
+    if (nextChild !== undefined) {
+      const oldIndex = matchingChild(previous, nextChild!, nextIndex, &previousKeyIndex);
+      if (oldIndex === undefined) {
+        mutations.push({
+          kind: mutationInsert(), nodeId: - 1i32, parentId: nodeId, fromIndex: 0usize, toIndex: nextIndex,
+        });
+      } else {
+        const previousIndex = oldIndex!;
+        if (previousIndex !== nextIndex && nextChild!.keyId() !== 0u64) {
+          mutations.push({
+            kind: mutationMove(), nodeId: - 1i32, parentId: nodeId, fromIndex: previousIndex, toIndex: nextIndex,
+          });
+        }
+        const previousChild = hostChildAt(previous, previousIndex);
+        if (previousChild !== undefined) {
+          diffTree(previousChild!, nextChild!, - 1i32, nodeId, nextIndex, mutations);
+        }
+      }
+    }
+    nextIndex = nextIndex + 1usize;
+  }
+  let previousIndex: usize = 0;
+  while (previousIndex<hostChildCount(previous)) {
+    const previousChild = hostChildAt(previous, previousIndex);
+    if (previousChild !== undefined) {
+      const key = previousChild!.keyId();
+      if ((key === 0u64 && previousIndex >= hostChildCount(next)) ||(key !== 0u64 && keyIndexGet( &nextKeyIndex, key) === undefined)) {
+        mutations.push({
+          kind: mutationRemove(), nodeId: - 1i32, parentId: nodeId, fromIndex: previousIndex, toIndex: 0usize,
+        });
+      }
+    }
+    previousIndex = previousIndex + 1usize;
+  }
+  disposeKeyIndex( &mut previousKeyIndex);
+  disposeKeyIndex( &mut nextKeyIndex);
+}

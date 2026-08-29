@@ -1,0 +1,179 @@
+import { Array } from "std/collections";
+import { String } from "std/string";
+import { Text } from "../src/components";
+import { EmptyProps } from "../src/core/types";
+import { Cleanup, clearHooks, useEffect, useState } from "../src/hooks/hooks";
+import { createText, Element, fragmentElements, hostChildAt, jsx } from "../src/jsx-runtime";
+import { HeadlessRenderer } from "../src/renderer/headless";
+
+static mut firstEffects: i32 = 0;
+static mut secondEffects: i32 = 0;
+static mut firstCleanups: i32 = 0;
+static mut secondCleanups: i32 = 0;
+static mut seenA: i32 = 0;
+static mut seenB: i32 = 0;
+function noop(): void {
+}
+function firstCleanup(): void {
+  unsafe {
+    firstCleanups = firstCleanups + 1i32;
+  }
+}
+function secondCleanup(): void {
+  unsafe {
+    secondCleanups = secondCleanups + 1i32;
+  }
+}
+function firstEffect(): Cleanup {
+  unsafe {
+    firstEffects = firstEffects + 1i32;
+  }
+  return firstCleanup;
+}
+function secondEffect(): Cleanup {
+  unsafe {
+    secondEffects = secondEffects + 1i32;
+  }
+  return secondCleanup;
+}
+function First(props: EmptyProps): Element {
+  useEffect(firstEffect, 1u64);
+  return <Text>first</Text>;
+}
+function Second(props: EmptyProps): Element {
+  useEffect(secondEffect, 1u64);
+  return <Text>second</Text>;
+}
+struct ItemProps {
+  public id: i32;
+  public seed: i32;
+}
+function Item(props: ItemProps): Element {
+  const state = useState<i32>(props.seed);
+  const current = state.current();
+  unsafe {
+    if (props.id === 1i32) {
+      seenA = current;
+    } else {
+      seenB = current;
+    }
+  }
+  return createText("item");
+}
+function list(reverse: bool): Element {
+  const children = new Array<Element>({
+    capacity: 2
+  });
+  const keyA: string | undefined = "a";
+  const keyB: string | undefined = "b";
+  if (!reverse) {
+    children.push(jsx<ItemProps>(Item, {
+      id: 1i32, seed: 10i32,
+    }, keyA));
+    children.push(jsx<ItemProps>(Item, {
+      id: 2i32, seed: 20i32,
+    }, keyB));
+  } else {
+    const reverseKeyA: string | undefined = "a";
+    const reverseKeyB: string | undefined = "b";
+    children.push(jsx<ItemProps>(Item, {
+      id: 2i32, seed: 20i32,
+    }, reverseKeyB));
+    children.push(jsx<ItemProps>(Item, {
+      id: 1i32, seed: 10i32,
+    }, reverseKeyA));
+  }
+  return fragmentElements(move children);
+}
+function singleItem(changedKey: bool): Element {
+  const children = new Array<Element>({
+    capacity: 1
+  });
+  let key: string | undefined = "stable";
+  let seed: i32 = 10;
+  if (changedKey) {
+    key = "remounted";
+    seed = 30i32;
+  }
+  children.push(jsx<ItemProps>(Item, {
+    id: 1i32, seed: seed,
+  }, key));
+  return fragmentElements(move children);
+}
+function main(): i32 {
+  clearHooks();
+  const firstKey: string | undefined = "same";
+  const secondKey: string | undefined = "same";
+  const first = jsx<EmptyProps>(First, {
+  }, move firstKey);
+  const second = jsx<EmptyProps>(Second, {
+  }, move secondKey);
+  if (first.typeId() === second.typeId()) {
+    first.dispose();
+    second.dispose();
+    return 10;
+  }
+  first.dispose();
+  second.dispose();
+  using renderer = new HeadlessRenderer();
+  const mountKey: string | undefined = "same";
+  renderer.mount(jsx<EmptyProps>(First, {
+  }, mountKey));
+  unsafe {
+    if (firstEffects !== 1i32 || secondEffects !== 0i32) {
+      renderer.unmount();
+      return 11;
+    }
+  }
+  const updateKey: string | undefined = "same";
+  renderer.update(jsx<EmptyProps>(Second, {
+  }, updateKey));
+  unsafe {
+    if (firstCleanups !== 1i32 || secondEffects !== 1i32) {
+      renderer.unmount();
+      return 12;
+    }
+  }
+  renderer.unmount();
+  unsafe {
+    if (secondCleanups !== 1i32) {
+      return 13;
+    }
+  }
+  clearHooks();
+  using keyed = new HeadlessRenderer();
+  keyed.mount(list(false));
+  unsafe {
+    if (seenA !== 10i32 || seenB !== 20i32) {
+      keyed.unmount();
+      return 14;
+    }
+  }
+  keyed.update(list(true));
+  unsafe {
+    if (seenA !== 10i32 || seenB !== 20i32) {
+      keyed.unmount();
+      return 15;
+    }
+  }
+  const firstChild = hostChildAt(keyed.rootElement(), 0usize);
+  const secondChild = hostChildAt(keyed.rootElement(), 1usize);
+  if (firstChild === undefined || secondChild === undefined || firstChild!.textLength() !== 4usize || secondChild!.textLength() !== 4usize) {
+    keyed.unmount();
+    return 16;
+  }
+  keyed.unmount();
+  clearHooks();
+  using remount = new HeadlessRenderer();
+  remount.mount(singleItem(false));
+  remount.update(singleItem(true));
+  unsafe {
+    if (seenA !== 30i32) {
+      remount.unmount();
+      return 17;
+    }
+  }
+  remount.unmount();
+  clearHooks();
+  return 0;
+}

@@ -1,0 +1,261 @@
+import { Element, ElementRef } from "../jsx-runtime";
+export enum FlexDirection {
+  Row, Column,
+}
+export enum Align {
+  Auto, Start, Center, End, Stretch,
+}
+export enum Justify {
+  Start, Center, End, SpaceBetween, SpaceAround, SpaceEvenly,
+}
+export enum PositionType {
+  Relative, Absolute,
+}
+export enum Display {
+  Flex, None,
+}
+export enum Overflow {
+  Visible, Hidden, Scroll,
+}
+export struct Insets {
+  public top: f32;
+  public right: f32;
+  public bottom: f32;
+  public left: f32;
+}
+export class Style {
+  public width: f32;
+  public height: f32;
+  public minWidth: f32;
+  public minHeight: f32;
+  public maxWidth: f32;
+  public maxHeight: f32;
+  public margin: f32;
+  public padding: f32;
+  public marginTop: f32;
+  public marginRight: f32;
+  public marginBottom: f32;
+  public marginLeft: f32;
+  public paddingTop: f32;
+  public paddingRight: f32;
+  public paddingBottom: f32;
+  public paddingLeft: f32;
+  public gap: f32;
+  public flex: f32;
+  public flexGrow: f32;
+  public flexShrink: f32;
+  public flexBasis: f32;
+  public flexDirection: i32;
+  public alignItems: i32;
+  public alignSelf: i32;
+  public justifyContent: i32;
+  public positionType: i32;
+  public insetTop: f32;
+  public insetRight: f32;
+  public insetBottom: f32;
+  public insetLeft: f32;
+  public display: i32;
+  public overflow: i32;
+  public aspectRatio: f32;
+  public hasMarginEdges: bool;
+  public hasPaddingEdges: bool;
+  public revision: u64;
+  public constructor() {
+    this.width = 0.0f32;
+    this.height = 0.0f32;
+    this.minWidth = 0.0f32;
+    this.minHeight = 0.0f32;
+    this.maxWidth = 0.0f32;
+    this.maxHeight = 0.0f32;
+    this.margin = 0.0f32;
+    this.padding = 0.0f32;
+    this.marginTop = 0.0f32;
+    this.marginRight = 0.0f32;
+    this.marginBottom = 0.0f32;
+    this.marginLeft = 0.0f32;
+    this.paddingTop = 0.0f32;
+    this.paddingRight = 0.0f32;
+    this.paddingBottom = 0.0f32;
+    this.paddingLeft = 0.0f32;
+    this.gap = 0.0f32;
+    this.flex = 0.0f32;
+    this.flexGrow = 0.0f32;
+    this.flexShrink = 1.0f32;
+    this.flexBasis = 0.0f32;
+    this.flexDirection = 1i32;
+    this.alignItems = 4i32;
+    this.alignSelf = 0i32;
+    this.justifyContent = 0i32;
+    this.positionType = 0i32;
+    this.insetTop = 0.0f32;
+    this.insetRight = 0.0f32;
+    this.insetBottom = 0.0f32;
+    this.insetLeft = 0.0f32;
+    this.display = 0i32;
+    this.overflow = 0i32;
+    this.aspectRatio = 0.0f32;
+    this.hasMarginEdges = false;
+    this.hasPaddingEdges = false;
+    this.revision = 0u64;
+  }
+}
+export function defaultStyle(): Style {
+  return new Style();
+}
+function bumpStyle(style: &mut Style): void {
+  style.revision = style.revision + 1u64;
+}
+export function styleSetWidth(style: &mut Style, value: f32): void {
+  style.width = value;
+  bumpStyle(style);
+}
+export function styleSetHeight(style: &mut Style, value: f32): void {
+  style.height = value;
+  bumpStyle(style);
+}
+export function styleSetMinWidth(style: &mut Style, value: f32): void {
+  style.minWidth = value;
+  bumpStyle(style);
+}
+export function styleSetMinHeight(style: &mut Style, value: f32): void {
+  style.minHeight = value;
+  bumpStyle(style);
+}
+export function styleSetPadding(style: &mut Style, value: f32): void {
+  style.padding = value;
+  style.hasPaddingEdges = false;
+  bumpStyle(style);
+}
+export function styleSetMargin(style: &mut Style, value: f32): void {
+  style.margin = value;
+  style.hasMarginEdges = false;
+  bumpStyle(style);
+}
+export function styleSetGap(style: &mut Style, value: f32): void {
+  style.gap = value;
+  bumpStyle(style);
+}
+export function styleSetFlexDirection(style: &mut Style, value: i32): void {
+  style.flexDirection = value;
+  bumpStyle(style);
+}
+export function styleSetJustifyContent(style: &mut Style, value: i32): void {
+  style.justifyContent = value;
+  bumpStyle(style);
+}
+export function styleSetAlignItems(style: &mut Style, value: i32): void {
+  style.alignItems = value;
+  bumpStyle(style);
+}
+export function styleSetDisplay(style: &mut Style, value: i32): void {
+  style.display = value;
+  bumpStyle(style);
+}
+export function styleSetMaxWidth(style: &mut Style, value: f32): void {
+  style.maxWidth = value;
+  bumpStyle(style);
+}
+export function styleSetMaxHeight(style: &mut Style, value: f32): void {
+  style.maxHeight = value;
+  bumpStyle(style);
+}
+export function styleSetFlex(style: &mut Style, value: f32): void {
+  style.flex = value;
+  bumpStyle(style);
+}
+export function styleSetFlexGrow(style: &mut Style, value: f32): void {
+  style.flexGrow = value;
+  bumpStyle(style);
+}
+export function styleSetFlexShrink(style: &mut Style, value: f32): void {
+  style.flexShrink = value;
+  bumpStyle(style);
+}
+export function styleSetFlexBasis(style: &mut Style, value: f32): void {
+  style.flexBasis = value;
+  bumpStyle(style);
+}
+export function styleSetAlignSelf(style: &mut Style, value: i32): void {
+  style.alignSelf = value;
+  bumpStyle(style);
+}
+export function styleSetPositionType(style: &mut Style, value: i32): void {
+  style.positionType = value;
+  bumpStyle(style);
+}
+export function styleSetOverflow(style: &mut Style, value: i32): void {
+  style.overflow = value;
+  bumpStyle(style);
+}
+export function styleSetInsets(style: &mut Style, top: f32, right: f32, bottom: f32, left: f32): void {
+  style.insetTop = top;
+  style.insetRight = right;
+  style.insetBottom = bottom;
+  style.insetLeft = left;
+  bumpStyle(style);
+}
+export function styleSetAspectRatio(style: &mut Style, value: f32): void {
+  style.aspectRatio = value;
+  bumpStyle(style);
+}
+export function styleSetMarginEdges(style: &mut Style, top: f32, right: f32, bottom: f32, left: f32): void {
+  style.marginTop = top;
+  style.marginRight = right;
+  style.marginBottom = bottom;
+  style.marginLeft = left;
+  style.hasMarginEdges = true;
+  bumpStyle(style);
+}
+export function styleSetPaddingEdges(style: &mut Style, top: f32, right: f32, bottom: f32, left: f32): void {
+  style.paddingTop = top;
+  style.paddingRight = right;
+  style.paddingBottom = bottom;
+  style.paddingLeft = left;
+  style.hasPaddingEdges = true;
+  bumpStyle(style);
+}
+export struct Event {
+  public kind: i32;
+  public keyCode: i32;
+  public text: string;
+}
+export struct EmptyProps {
+  public marker?: bool;
+}
+export struct WindowProps {
+  public children: Element;
+  public title: string;
+  public width?: f32;
+  public height?: f32;
+  public elementRef?: &ElementRef;
+}
+export struct ViewProps {
+  public style?: Style;
+  public children: Element;
+  public elementRef?: &ElementRef;
+}
+export struct TextSpan {
+  private pointer: *const u8;
+  private length: usize;
+  public static fromStr(value: &str): TextSpan {
+    unsafe {
+      return {
+        pointer: value as *const u8, length: value.byteLength,
+      };
+    }
+  }
+  public asStr(): &str {
+    unsafe {
+      return & *(this.pointer as *const str);
+    }
+  }
+}
+export struct TextProps {
+  public children: string;
+  public elementRef?: &ElementRef;
+}
+export struct ButtonProps {
+  public children: string;
+  public onPress: () => void;
+  public elementRef?: &ElementRef;
+}

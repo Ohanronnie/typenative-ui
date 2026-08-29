@@ -1,0 +1,60 @@
+import { Button } from "../src/components";
+import { EmptyProps } from "../src/core/types";
+import { clearHooks } from "../src/hooks/hooks";
+import { Element, kindButton } from "../src/jsx-runtime";
+import { HeadlessRenderer } from "../src/renderer/headless";
+
+static mut presses: i32 = 0;
+function hit(): void {
+  unsafe {
+    presses = presses + 1i32;
+  }
+}
+function Root(props: EmptyProps): Element {
+  return <Button onPress={hit}>Increment</Button>;
+}
+function main(): i32 {
+  using renderer = new HeadlessRenderer();
+  renderer.mount(<Root />);
+  const button = renderer.queryFirst(kindButton());
+  if (button === undefined) {
+    renderer.unmount();
+    clearHooks();
+    return 10;
+  }
+  if (renderer.accessibilityRole(button!) !== 4 || renderer.accessibilityLabelLength(button!) !== 9usize) {
+    renderer.unmount();
+    clearHooks();
+    return 11;
+  }
+  renderer.focus(button!);
+  if (!renderer.isFocused(button!)) {
+    renderer.unmount();
+    clearHooks();
+    return 12;
+  }
+  renderer.simulatePress(button!);
+  unsafe {
+    if (presses !== 1i32) {
+      renderer.unmount();
+      clearHooks();
+      return 13;
+    }
+  }
+  renderer.update(<Root />);
+  const updated = renderer.queryFirst(kindButton());
+  if (updated === undefined) {
+    renderer.unmount();
+    clearHooks();
+    return 14;
+  }
+  renderer.simulatePress(updated!);
+  renderer.unmount();
+  clearHooks();
+  unsafe {
+    if (presses !== 2i32) {
+      return 15;
+    }
+  }
+  return 0;
+}

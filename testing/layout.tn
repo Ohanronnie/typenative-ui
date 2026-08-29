@@ -1,0 +1,40 @@
+import { Style } from "../src/core/types";
+import { LayoutEngine, LayoutNode } from "../src/layout/layout";
+
+function main(): i32 {
+  const rootStyle = new Style();
+  rootStyle.width = 200.0f32;
+  rootStyle.height = 100.0f32;
+  rootStyle.padding = 10.0f32;
+  rootStyle.gap = 5.0f32;
+  rootStyle.flexDirection = 0i32;
+  const root = new LayoutNode(rootStyle);
+  const firstStyle = new Style();
+  firstStyle.width = 40.0f32;
+  firstStyle.height = 20.0f32;
+  const first = new LayoutNode(firstStyle);
+  root.add(move first);
+  const secondStyle = new Style();
+  secondStyle.width = 60.0f32;
+  secondStyle.height = 30.0f32;
+  const second = new LayoutNode(secondStyle);
+  root.add(move second);
+  const engine = new LayoutEngine();
+  engine.calculate( &mut root, 200.0f32, 100.0f32);
+  const firstFrame = root.childFrameAt(0usize);
+  const secondFrame = root.childFrameAt(1usize);
+  if (root.frameWidth() !== 200.0f32 || root.frameHeight() !== 100.0f32) {
+    root.close();
+    return 1;
+  }
+  if (firstFrame.x !== 10.0f32 || firstFrame.y !== 10.0f32 || firstFrame.width !== 40.0f32 || firstFrame.height !== 20.0f32) {
+    root.close();
+    return 2;
+  }
+  if (secondFrame.x !== 55.0f32 || secondFrame.y !== 10.0f32 || secondFrame.width !== 60.0f32 || secondFrame.height !== 30.0f32) {
+    root.close();
+    return 3;
+  }
+  root.close();
+  return 0;
+}

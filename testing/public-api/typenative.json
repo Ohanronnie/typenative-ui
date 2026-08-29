@@ -1,0 +1,21 @@
+{
+  "entry": "../public-api.tnx",
+  "target": "aarch64-apple-darwin",
+  "jsx": {
+    "runtime": "../src/jsx-runtime"
+  },
+  "link": {
+    "arguments": [
+      "-framework",
+      "AppKit",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreGraphics",
+      "-lobjc",
+      "-lc++",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendSize",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendRect"
+    ]
+  }
+}

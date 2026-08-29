@@ -1,0 +1,1510 @@
+import { nullPointer, rawAlloc, rawFree, sizeOf, storeRaw } from "std/alloc";
+import { Array } from "std/collections";
+import { currentComponentKey, currentComponentSource, nextHookIndex } from "../jsx-runtime";
+
+declare extern "C" {
+  function tn_runtime_abort(code: u32): void;
+}
+function nullRaw(): *mut u8 {
+  unsafe {
+    return nullPointer<u8>();
+  }
+}
+export type StateSetter<T > =(T) => void;
+export type Cleanup =() => void;
+export type EffectCallback =() => Cleanup;
+function noop(): void {
+}
+function noopEffect(): Cleanup {
+  return noop;
+}
+const hookState: i32 = 1;
+const hookReducer: i32 = 2;
+const hookEffect: i32 = 3;
+const hookLayoutEffect: i32 = 4;
+const hookMemo: i32 = 5;
+const hookCallback: i32 = 6;
+const hookRef: i32 = 7;
+const hookId: i32 = 8;
+struct HookSlot {
+  public source: u64;
+  public key: u64;
+  public index: i32;
+  public kind: i32;
+  public initialized: bool;
+  public value: *mut u8;
+  public valueSize: usize;
+  public dependencyHash: u64;
+  public hasDependencies: bool;
+  public pending: bool;
+  public seenGeneration: u64;
+  public effectSlot: i32;
+  public callbackSlot: i32;
+}
+struct ComponentShape {
+  public source: u64;
+  public key: u64;
+  public expectedCount: i32;
+  public hasExpectedCount: bool;
+  public seenGeneration: u64;
+}
+function newHookSlot(source: u64, key: u64, index: i32, kind: i32, generation: u64): HookSlot {
+  return {
+    source: source, key: key, index: index, kind: kind, initialized: false, value: nullRaw(), valueSize: 0usize, dependencyHash: 0u64, hasDependencies: false, pending: false, seenGeneration: generation, effectSlot: - 1i32, callbackSlot: - 1i32,
+  };
+}
+class HookStore {
+  public slots: Array<HookSlot>;
+  public componentShapes: Array<ComponentShape>;
+  public updatePending: bool;
+  public updateCallback: () => void;
+  public hasUpdateCallback: bool;
+  public idCounter: u64;
+  public constructor() {
+    this.slots = new Array<HookSlot>({
+      capacity: 32
+    });
+    this.componentShapes = new Array<ComponentShape>({
+      capacity: 8
+    });
+    this.updatePending = false;
+    this.updateCallback = noop;
+    this.hasUpdateCallback = false;
+    this.idCounter = 0u64;
+  }
+  public slotAt(index: usize): &mut HookSlot {
+    return this.slots.atMut(index)!;
+  }
+}
+static mut hookStore: *mut u8 = nullPointer<u8>();
+static mut integerStateValue: i32 = 0;
+static mut integerStateInitialized: bool = false;
+static mut externalUpdatePending: bool = false;
+static mut hookGeneration: u64 = 0;
+static mut batchDepth: i32 = 0;
+static mut effectUsed0: bool = false;
+static mut effectUsed1: bool = false;
+static mut effectUsed2: bool = false;
+static mut effectUsed3: bool = false;
+static mut effectUsed4: bool = false;
+static mut effectUsed5: bool = false;
+static mut effectUsed6: bool = false;
+static mut effectUsed7: bool = false;
+static mut effectUsed8: bool = false;
+static mut effectUsed9: bool = false;
+static mut effectUsed10: bool = false;
+static mut effectUsed11: bool = false;
+static mut effectUsed12: bool = false;
+static mut effectUsed13: bool = false;
+static mut effectUsed14: bool = false;
+static mut effectUsed15: bool = false;
+static mut effectCallback0: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback1: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback2: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback3: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback4: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback5: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback6: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback7: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback8: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback9: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback10: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback11: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback12: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback13: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback14: (() =>(() => void)) | undefined = undefined;
+static mut effectCallback15: (() =>(() => void)) | undefined = undefined;
+static mut effectCleanup0: (() => void) | undefined = undefined;
+static mut effectCleanup1: (() => void) | undefined = undefined;
+static mut effectCleanup2: (() => void) | undefined = undefined;
+static mut effectCleanup3: (() => void) | undefined = undefined;
+static mut effectCleanup4: (() => void) | undefined = undefined;
+static mut effectCleanup5: (() => void) | undefined = undefined;
+static mut effectCleanup6: (() => void) | undefined = undefined;
+static mut effectCleanup7: (() => void) | undefined = undefined;
+static mut effectCleanup8: (() => void) | undefined = undefined;
+static mut effectCleanup9: (() => void) | undefined = undefined;
+static mut effectCleanup10: (() => void) | undefined = undefined;
+static mut effectCleanup11: (() => void) | undefined = undefined;
+static mut effectCleanup12: (() => void) | undefined = undefined;
+static mut effectCleanup13: (() => void) | undefined = undefined;
+static mut effectCleanup14: (() => void) | undefined = undefined;
+static mut effectCleanup15: (() => void) | undefined = undefined;
+static mut effectHasCleanup0: bool = false;
+static mut effectHasCleanup1: bool = false;
+static mut effectHasCleanup2: bool = false;
+static mut effectHasCleanup3: bool = false;
+static mut effectHasCleanup4: bool = false;
+static mut effectHasCleanup5: bool = false;
+static mut effectHasCleanup6: bool = false;
+static mut effectHasCleanup7: bool = false;
+static mut effectHasCleanup8: bool = false;
+static mut effectHasCleanup9: bool = false;
+static mut effectHasCleanup10: bool = false;
+static mut effectHasCleanup11: bool = false;
+static mut effectHasCleanup12: bool = false;
+static mut effectHasCleanup13: bool = false;
+static mut effectHasCleanup14: bool = false;
+static mut effectHasCleanup15: bool = false;
+static mut callbackUsed0: bool = false;
+static mut callbackUsed1: bool = false;
+static mut callbackUsed2: bool = false;
+static mut callbackUsed3: bool = false;
+static mut callbackUsed4: bool = false;
+static mut callbackUsed5: bool = false;
+static mut callbackUsed6: bool = false;
+static mut callbackUsed7: bool = false;
+static mut callbackUsed8: bool = false;
+static mut callbackUsed9: bool = false;
+static mut callbackUsed10: bool = false;
+static mut callbackUsed11: bool = false;
+static mut callbackUsed12: bool = false;
+static mut callbackUsed13: bool = false;
+static mut callbackUsed14: bool = false;
+static mut callbackUsed15: bool = false;
+static mut callback0: (() => void) | undefined = undefined;
+static mut callback1: (() => void) | undefined = undefined;
+static mut callback2: (() => void) | undefined = undefined;
+static mut callback3: (() => void) | undefined = undefined;
+static mut callback4: (() => void) | undefined = undefined;
+static mut callback5: (() => void) | undefined = undefined;
+static mut callback6: (() => void) | undefined = undefined;
+static mut callback7: (() => void) | undefined = undefined;
+static mut callback8: (() => void) | undefined = undefined;
+static mut callback9: (() => void) | undefined = undefined;
+static mut callback10: (() => void) | undefined = undefined;
+static mut callback11: (() => void) | undefined = undefined;
+static mut callback12: (() => void) | undefined = undefined;
+static mut callback13: (() => void) | undefined = undefined;
+static mut callback14: (() => void) | undefined = undefined;
+static mut callback15: (() => void) | undefined = undefined;
+function store(): &mut HookStore {
+  unsafe {
+    if (hookStore === nullPointer<u8>()) {
+      hookStore =(new HookStore())as *mut u8;
+    }
+    return &mut *(hookStore as *mut HookStore);
+  }
+}
+function reserveCallback(): i32 {
+  unsafe {
+    if (!callbackUsed0) {
+      callbackUsed0 = true;
+      return 0;
+    }
+    if (!callbackUsed1) {
+      callbackUsed1 = true;
+      return 1;
+    }
+    if (!callbackUsed2) {
+      callbackUsed2 = true;
+      return 2;
+    }
+    if (!callbackUsed3) {
+      callbackUsed3 = true;
+      return 3;
+    }
+    if (!callbackUsed4) {
+      callbackUsed4 = true;
+      return 4;
+    }
+    if (!callbackUsed5) {
+      callbackUsed5 = true;
+      return 5;
+    }
+    if (!callbackUsed6) {
+      callbackUsed6 = true;
+      return 6;
+    }
+    if (!callbackUsed7) {
+      callbackUsed7 = true;
+      return 7;
+    }
+    if (!callbackUsed8) {
+      callbackUsed8 = true;
+      return 8;
+    }
+    if (!callbackUsed9) {
+      callbackUsed9 = true;
+      return 9;
+    }
+    if (!callbackUsed10) {
+      callbackUsed10 = true;
+      return 10;
+    }
+    if (!callbackUsed11) {
+      callbackUsed11 = true;
+      return 11;
+    }
+    if (!callbackUsed12) {
+      callbackUsed12 = true;
+      return 12;
+    }
+    if (!callbackUsed13) {
+      callbackUsed13 = true;
+      return 13;
+    }
+    if (!callbackUsed14) {
+      callbackUsed14 = true;
+      return 14;
+    }
+    if (!callbackUsed15) {
+      callbackUsed15 = true;
+      return 15;
+    }
+  }
+  unsafe {
+    tn_runtime_abort(94u32);
+  }
+  return - 1i32;
+}
+function installCallback(slot: i32, callback: () => void): void {
+  unsafe {
+    if (slot === 0i32) {
+      callback0 = move callback;
+      return;
+    }
+    if (slot === 1i32) {
+      callback1 = move callback;
+      return;
+    }
+    if (slot === 2i32) {
+      callback2 = move callback;
+      return;
+    }
+    if (slot === 3i32) {
+      callback3 = move callback;
+      return;
+    }
+    if (slot === 4i32) {
+      callback4 = move callback;
+      return;
+    }
+    if (slot === 5i32) {
+      callback5 = move callback;
+      return;
+    }
+    if (slot === 6i32) {
+      callback6 = move callback;
+      return;
+    }
+    if (slot === 7i32) {
+      callback7 = move callback;
+      return;
+    }
+    if (slot === 8i32) {
+      callback8 = move callback;
+      return;
+    }
+    if (slot === 9i32) {
+      callback9 = move callback;
+      return;
+    }
+    if (slot === 10i32) {
+      callback10 = move callback;
+      return;
+    }
+    if (slot === 11i32) {
+      callback11 = move callback;
+      return;
+    }
+    if (slot === 12i32) {
+      callback12 = move callback;
+      return;
+    }
+    if (slot === 13i32) {
+      callback13 = move callback;
+      return;
+    }
+    if (slot === 14i32) {
+      callback14 = move callback;
+      return;
+    }
+    if (slot === 15i32) {
+      callback15 = move callback;
+    }
+  }
+}
+function borrowCallback(slot: i32): () => void {
+  unsafe {
+    if (slot === 0i32) {
+      return callback0!;
+    }
+    if (slot === 1i32) {
+      return callback1!;
+    }
+    if (slot === 2i32) {
+      return callback2!;
+    }
+    if (slot === 3i32) {
+      return callback3!;
+    }
+    if (slot === 4i32) {
+      return callback4!;
+    }
+    if (slot === 5i32) {
+      return callback5!;
+    }
+    if (slot === 6i32) {
+      return callback6!;
+    }
+    if (slot === 7i32) {
+      return callback7!;
+    }
+    if (slot === 8i32) {
+      return callback8!;
+    }
+    if (slot === 9i32) {
+      return callback9!;
+    }
+    if (slot === 10i32) {
+      return callback10!;
+    }
+    if (slot === 11i32) {
+      return callback11!;
+    }
+    if (slot === 12i32) {
+      return callback12!;
+    }
+    if (slot === 13i32) {
+      return callback13!;
+    }
+    if (slot === 14i32) {
+      return callback14!;
+    }
+    if (slot === 15i32) {
+      return callback15!;
+    }
+  }
+  return noop;
+}
+function releaseCallback(slot: i32): void {
+  unsafe {
+    if (slot === 0i32) {
+      callback0 = undefined;
+      callbackUsed0 = false;
+      return;
+    }
+    if (slot === 1i32) {
+      callback1 = undefined;
+      callbackUsed1 = false;
+      return;
+    }
+    if (slot === 2i32) {
+      callback2 = undefined;
+      callbackUsed2 = false;
+      return;
+    }
+    if (slot === 3i32) {
+      callback3 = undefined;
+      callbackUsed3 = false;
+      return;
+    }
+    if (slot === 4i32) {
+      callback4 = undefined;
+      callbackUsed4 = false;
+      return;
+    }
+    if (slot === 5i32) {
+      callback5 = undefined;
+      callbackUsed5 = false;
+      return;
+    }
+    if (slot === 6i32) {
+      callback6 = undefined;
+      callbackUsed6 = false;
+      return;
+    }
+    if (slot === 7i32) {
+      callback7 = undefined;
+      callbackUsed7 = false;
+      return;
+    }
+    if (slot === 8i32) {
+      callback8 = undefined;
+      callbackUsed8 = false;
+      return;
+    }
+    if (slot === 9i32) {
+      callback9 = undefined;
+      callbackUsed9 = false;
+      return;
+    }
+    if (slot === 10i32) {
+      callback10 = undefined;
+      callbackUsed10 = false;
+      return;
+    }
+    if (slot === 11i32) {
+      callback11 = undefined;
+      callbackUsed11 = false;
+      return;
+    }
+    if (slot === 12i32) {
+      callback12 = undefined;
+      callbackUsed12 = false;
+      return;
+    }
+    if (slot === 13i32) {
+      callback13 = undefined;
+      callbackUsed13 = false;
+      return;
+    }
+    if (slot === 14i32) {
+      callback14 = undefined;
+      callbackUsed14 = false;
+      return;
+    }
+    if (slot === 15i32) {
+      callback15 = undefined;
+      callbackUsed15 = false;
+    }
+  }
+}
+function discardCallback(callback: () => void): void {
+}
+function requireComponent(): bool {
+  if (currentComponentSource() !== 0u64) {
+    return true;
+  }
+  unsafe {
+    tn_runtime_abort(92u32);
+  }
+  return false;
+}
+function markComponentHook(source: u64, key: u64, generation: u64): void {
+  const runtime = store();
+  let cursor: usize = 0;
+  while (cursor<runtime.componentShapes.length) {
+    const shape = runtime.componentShapes.atMut(cursor);
+    if (shape !== undefined && shape!.source === source && shape!.key === key) {
+      shape!.seenGeneration = generation;
+      return;
+    }
+    cursor = cursor + 1usize;
+  }
+  runtime.componentShapes.push({
+    source: source, key: key, expectedCount: 0i32, hasExpectedCount: false, seenGeneration: generation,
+  });
+}
+function copyComponentShape(runtime: &HookStore, index: usize): ComponentShape {
+  const shape = runtime.componentShapes.at(index);
+  if (shape === undefined) {
+    return {
+      source: 0u64, key: 0u64, expectedCount: 0i32, hasExpectedCount: false, seenGeneration: 0u64,
+    };
+  }
+  return {
+    source: shape!.source, key: shape!.key, expectedCount: shape!.expectedCount, hasExpectedCount: shape!.hasExpectedCount, seenGeneration: shape!.seenGeneration,
+  };
+}
+function componentActualCount(runtime: &HookStore, generation: u64, source: u64, key: u64): i32 {
+  let actualCount: i32 = 0;
+  let slotIndex: usize = 0;
+  while (slotIndex<runtime.slots.length) {
+    const slot = runtime.slots.at(slotIndex);
+    if (slot !== undefined && slot!.seenGeneration === generation && slot!.source === source && slot!.key === key && slot!.index + 1i32 > actualCount) {
+      actualCount = slot!.index + 1i32;
+    }
+    slotIndex = slotIndex + 1usize;
+  }
+  return actualCount;
+}
+function validateComponentShapes(generation: u64): void {
+  const runtime = store();
+  let shapeIndex: usize = 0;
+  while (shapeIndex<runtime.componentShapes.length) {
+    const shape = copyComponentShape(runtime, shapeIndex);
+    if (shape.seenGeneration === generation) {
+      const actualCount = componentActualCount(runtime, generation, shape.source, shape.key);
+      if (shape.hasExpectedCount && shape.expectedCount !== actualCount) {
+        unsafe {
+          tn_runtime_abort(94u32);
+        }
+      }
+      const updatedShape = runtime.componentShapes.atMut(shapeIndex);
+      if (updatedShape !== undefined) {
+        updatedShape!.expectedCount = actualCount;
+        updatedShape!.hasExpectedCount = true;
+      }
+    }
+    shapeIndex = shapeIndex + 1usize;
+  }
+}
+function findSlot(source: u64, key: u64, index: i32, kind: i32): usize {
+  const runtime = store();
+  let generation: u64 = 0;
+  unsafe {
+    generation = hookGeneration;
+  }
+  markComponentHook(source, key, generation);
+  let cursor: usize = 0;
+  while (cursor<runtime.slots.length) {
+    const existing = runtime.slots.at(cursor);
+    if (existing !== undefined && existing!.source === source && existing!.key === key && existing!.index === index) {
+      if (existing!.kind !== kind) {
+        unsafe {
+          tn_runtime_abort(94u32);
+        }
+      }
+      unsafe {
+        existing!.seenGeneration = hookGeneration;
+      }
+      return cursor;
+    }
+    cursor = cursor + 1usize;
+  }
+  cursor = 0;
+  while (cursor<runtime.slots.length) {
+    const reusable = runtime.slots.atMut(cursor);
+    if (reusable !== undefined && reusable!.seenGeneration !== generation) {
+      disposeHookSlot(reusable!);
+      reusable!.source = source;
+      reusable!.key = key;
+      reusable!.index = index;
+      reusable!.kind = kind;
+      reusable!.initialized = false;
+      reusable!.valueSize = 0usize;
+      reusable!.dependencyHash = 0u64;
+      reusable!.hasDependencies = false;
+      reusable!.pending = false;
+      reusable!.effectSlot = - 1i32;
+      reusable!.callbackSlot = - 1i32;
+      reusable!.seenGeneration = generation;
+      return cursor;
+    }
+    cursor = cursor + 1usize;
+  }
+  runtime.slots.push(newHookSlot(source, key, index, kind, generation));
+  return runtime.slots.length - 1usize;
+}
+export function beginHookPass(): void {
+  unsafe {
+    hookGeneration = hookGeneration + 1u64;
+  }
+}
+function currentSlot(kind: i32): usize {
+  if (!requireComponent()) {
+    return 0;
+  }
+  return findSlot(currentComponentSource(), currentComponentKey(), nextHookIndex(), kind);
+}
+function slotAt(index: usize): &mut HookSlot {
+  return store().slotAt(index);
+}
+function writeValue<T>(slot: &mut HookSlot, value: T): void {
+  unsafe {
+    if (slot.value !== nullPointer<u8>()) {
+      rawFree(slot.value);
+    }
+    slot.value = rawAlloc(sizeOf<T>());
+    slot.valueSize = sizeOf<T>();
+    storeRaw<T>(slot.value as *mut T, move value);
+    slot.initialized = true;
+  }
+}
+function readValue<T>(slot: &HookSlot): T {
+  unsafe {
+    return *(slot.value as *const T);
+  }
+}
+function markUpdate(): void {
+  if (currentComponentSource() !== 0u64) {
+    unsafe {
+      tn_runtime_abort(91u32);
+    }
+  }
+  const runtime = store();
+  runtime.updatePending = true;
+  let shouldNotify = false;
+  unsafe {
+    shouldNotify = batchDepth === 0i32;
+  }
+  if (runtime.hasUpdateCallback && shouldNotify) {
+    runtime.updateCallback();
+  }
+}
+export function beginBatch(): void {
+  unsafe {
+    batchDepth = batchDepth + 1i32;
+  }
+}
+export function endBatch(): void {
+  let shouldNotify = false;
+  unsafe {
+    if (batchDepth > 0i32) {
+      batchDepth = batchDepth - 1i32;
+    }
+    shouldNotify = batchDepth === 0i32;
+  }
+  const runtime = store();
+  if (shouldNotify && runtime.updatePending && runtime.hasUpdateCallback) {
+    runtime.updateCallback();
+  }
+}
+export function batch(callback: () => void): void {
+  beginBatch();
+  callback();
+  endBatch();
+}
+export function setUpdateCallback(callback: () => void): void {
+  const runtime = store();
+  runtime.updateCallback = move callback;
+  runtime.hasUpdateCallback = true;
+}
+export function clearUpdateCallback(): void {
+  const runtime = store();
+  runtime.updateCallback = noop;
+  runtime.hasUpdateCallback = false;
+}
+export function takePendingUpdate(): bool {
+  const runtime = store();
+  let pending = runtime.updatePending;
+  unsafe {
+    if (externalUpdatePending) {
+      pending = true;
+      externalUpdatePending = false;
+    }
+  }
+  runtime.updatePending = false;
+  return pending;
+}
+export struct State<T> {
+  public value: T;
+  private pointer: *mut u8;
+  public set(value: T): void {
+    unsafe {
+      storeRaw<T>(this.pointer as *mut T, move value);
+    }
+    markUpdate();
+  }
+  public current(): T {
+    unsafe {
+      return *(this.pointer as *const T);
+    }
+  }
+  public update(transform: (T) => T): void {
+    const current = this.current();
+    const next = transform(move current);
+    this.set(move next);
+  }
+}
+function makeState<T>(value: T, pointer: *mut u8): State<T> {
+  return {
+    value: move value, pointer: pointer,
+  };
+}
+export struct IntState {
+  public value: i32;
+  public set: (i32) => void;
+}
+export function setIntState(value: i32): void {
+  unsafe {
+    integerStateValue = value;
+    integerStateInitialized = true;
+    externalUpdatePending = true;
+  }
+}
+export function useIntState(initial: i32): IntState {
+  let value: i32 = 0;
+  unsafe {
+    if (!integerStateInitialized) {
+      integerStateValue = initial;
+      integerStateInitialized = true;
+    }
+    value = integerStateValue;
+  }
+  return {
+    value: value, set: setIntState,
+  };
+}
+export function useState<T>(initial: T): State<T> {
+  const index = currentSlot(hookState);
+  const slot = slotAt(index);
+  if (!slot.initialized) {
+    writeValue<T>(slot, move initial);
+  }
+  const value = readValue<T>(slot);
+  const pointer = slot.value;
+  return makeState<T>(move value, pointer);
+}
+export struct ReducerState<StateValue, Action> {
+  public value: StateValue;
+  private pointer: *mut u8;
+  public set(value: StateValue): void {
+    unsafe {
+      storeRaw<StateValue>(this.pointer as *mut StateValue, move value);
+    }
+    markUpdate();
+  }
+  public current(): StateValue {
+    unsafe {
+      return *(this.pointer as *const StateValue);
+    }
+  }
+  public dispatch(reducer: (StateValue, Action) => StateValue, action: Action): void {
+    const next = reducer(this.current(), move action);
+    this.set(move next);
+  }
+}
+function makeReducerState<StateValue, Action>(value: StateValue, pointer: *mut u8): ReducerState<StateValue, Action> {
+  return {
+    value: move value, pointer: pointer,
+  };
+}
+export struct IntReducerState {
+  public value: i32;
+  private pointer: *mut u8;
+  public set(value: i32): void {
+    unsafe {
+      storeRaw<i32>(this.pointer as *mut i32, value);
+    }
+    markUpdate();
+  }
+  public current(): i32 {
+    unsafe {
+      return *(this.pointer as *const i32);
+    }
+  }
+  public dispatch(reducer: (i32, i32) => i32, action: i32): void {
+    const next = reducer(this.current(), action);
+    this.set(next);
+  }
+}
+function makeIntReducerState(value: i32, pointer: *mut u8): IntReducerState {
+  return {
+    value: value, pointer: pointer,
+  };
+}
+export function useReducer<StateValue, Action>(reducer: (StateValue, Action) => StateValue, initial: StateValue): ReducerState<StateValue, Action> {
+  const index = currentSlot(hookReducer);
+  const slot = slotAt(index);
+  if (!slot.initialized) {
+    writeValue<StateValue>(slot, move initial);
+  }
+  const value = readValue<StateValue>(slot);
+  const pointer = slot.value;
+  return makeReducerState<StateValue, Action>(move value, pointer);
+}
+export function useIntReducer(reducer: (i32, i32) => i32, initial: i32): IntReducerState {
+  const index = currentSlot(hookReducer);
+  const slot = slotAt(index);
+  if (!slot.initialized) {
+    writeValue<i32>(slot, initial);
+  }
+  const value = readValue<i32>(slot);
+  const pointer = slot.value;
+  return makeIntReducerState(value, pointer);
+}
+function reserveEffectSlot(): i32 {
+  unsafe {
+    if (!effectUsed0) {
+      effectUsed0 = true;
+      return 0;
+    }
+    if (!effectUsed1) {
+      effectUsed1 = true;
+      return 1;
+    }
+    if (!effectUsed2) {
+      effectUsed2 = true;
+      return 2;
+    }
+    if (!effectUsed3) {
+      effectUsed3 = true;
+      return 3;
+    }
+    if (!effectUsed4) {
+      effectUsed4 = true;
+      return 4;
+    }
+    if (!effectUsed5) {
+      effectUsed5 = true;
+      return 5;
+    }
+    if (!effectUsed6) {
+      effectUsed6 = true;
+      return 6;
+    }
+    if (!effectUsed7) {
+      effectUsed7 = true;
+      return 7;
+    }
+    if (!effectUsed8) {
+      effectUsed8 = true;
+      return 8;
+    }
+    if (!effectUsed9) {
+      effectUsed9 = true;
+      return 9;
+    }
+    if (!effectUsed10) {
+      effectUsed10 = true;
+      return 10;
+    }
+    if (!effectUsed11) {
+      effectUsed11 = true;
+      return 11;
+    }
+    if (!effectUsed12) {
+      effectUsed12 = true;
+      return 12;
+    }
+    if (!effectUsed13) {
+      effectUsed13 = true;
+      return 13;
+    }
+    if (!effectUsed14) {
+      effectUsed14 = true;
+      return 14;
+    }
+    if (!effectUsed15) {
+      effectUsed15 = true;
+      return 15;
+    }
+  }
+  unsafe {
+    tn_runtime_abort(93u32);
+  }
+  return - 1i32;
+}
+function installEffect(slot: i32, effect: EffectCallback): void {
+  unsafe {
+    if (slot === 0i32) {
+      effectCallback0 = effect;
+      return;
+    }
+    if (slot === 1i32) {
+      effectCallback1 = effect;
+      return;
+    }
+    if (slot === 2i32) {
+      effectCallback2 = effect;
+      return;
+    }
+    if (slot === 3i32) {
+      effectCallback3 = effect;
+      return;
+    }
+    if (slot === 4i32) {
+      effectCallback4 = effect;
+      return;
+    }
+    if (slot === 5i32) {
+      effectCallback5 = effect;
+      return;
+    }
+    if (slot === 6i32) {
+      effectCallback6 = effect;
+      return;
+    }
+    if (slot === 7i32) {
+      effectCallback7 = effect;
+      return;
+    }
+    if (slot === 8i32) {
+      effectCallback8 = effect;
+      return;
+    }
+    if (slot === 9i32) {
+      effectCallback9 = effect;
+      return;
+    }
+    if (slot === 10i32) {
+      effectCallback10 = effect;
+      return;
+    }
+    if (slot === 11i32) {
+      effectCallback11 = effect;
+      return;
+    }
+    if (slot === 12i32) {
+      effectCallback12 = effect;
+      return;
+    }
+    if (slot === 13i32) {
+      effectCallback13 = effect;
+      return;
+    }
+    if (slot === 14i32) {
+      effectCallback14 = effect;
+      return;
+    }
+    if (slot === 15i32) {
+      effectCallback15 = effect;
+    }
+  }
+}
+function invokeEffect(slot: i32): Cleanup {
+  unsafe {
+    if (slot === 0i32) {
+      return effectCallback0!();
+    }
+    if (slot === 1i32) {
+      return effectCallback1!();
+    }
+    if (slot === 2i32) {
+      return effectCallback2!();
+    }
+    if (slot === 3i32) {
+      return effectCallback3!();
+    }
+    if (slot === 4i32) {
+      return effectCallback4!();
+    }
+    if (slot === 5i32) {
+      return effectCallback5!();
+    }
+    if (slot === 6i32) {
+      return effectCallback6!();
+    }
+    if (slot === 7i32) {
+      return effectCallback7!();
+    }
+    if (slot === 8i32) {
+      return effectCallback8!();
+    }
+    if (slot === 9i32) {
+      return effectCallback9!();
+    }
+    if (slot === 10i32) {
+      return effectCallback10!();
+    }
+    if (slot === 11i32) {
+      return effectCallback11!();
+    }
+    if (slot === 12i32) {
+      return effectCallback12!();
+    }
+    if (slot === 13i32) {
+      return effectCallback13!();
+    }
+    if (slot === 14i32) {
+      return effectCallback14!();
+    }
+    if (slot === 15i32) {
+      return effectCallback15!();
+    }
+  }
+  return noop;
+}
+function installCleanup(slot: i32, cleanup: Cleanup): void {
+  unsafe {
+    if (slot === 0i32) {
+      effectCleanup0 = move cleanup;
+      effectHasCleanup0 = true;
+      return;
+    }
+    if (slot === 1i32) {
+      effectCleanup1 = move cleanup;
+      effectHasCleanup1 = true;
+      return;
+    }
+    if (slot === 2i32) {
+      effectCleanup2 = move cleanup;
+      effectHasCleanup2 = true;
+      return;
+    }
+    if (slot === 3i32) {
+      effectCleanup3 = move cleanup;
+      effectHasCleanup3 = true;
+      return;
+    }
+    if (slot === 4i32) {
+      effectCleanup4 = move cleanup;
+      effectHasCleanup4 = true;
+      return;
+    }
+    if (slot === 5i32) {
+      effectCleanup5 = move cleanup;
+      effectHasCleanup5 = true;
+      return;
+    }
+    if (slot === 6i32) {
+      effectCleanup6 = move cleanup;
+      effectHasCleanup6 = true;
+      return;
+    }
+    if (slot === 7i32) {
+      effectCleanup7 = move cleanup;
+      effectHasCleanup7 = true;
+      return;
+    }
+    if (slot === 8i32) {
+      effectCleanup8 = move cleanup;
+      effectHasCleanup8 = true;
+      return;
+    }
+    if (slot === 9i32) {
+      effectCleanup9 = move cleanup;
+      effectHasCleanup9 = true;
+      return;
+    }
+    if (slot === 10i32) {
+      effectCleanup10 = move cleanup;
+      effectHasCleanup10 = true;
+      return;
+    }
+    if (slot === 11i32) {
+      effectCleanup11 = move cleanup;
+      effectHasCleanup11 = true;
+      return;
+    }
+    if (slot === 12i32) {
+      effectCleanup12 = move cleanup;
+      effectHasCleanup12 = true;
+      return;
+    }
+    if (slot === 13i32) {
+      effectCleanup13 = move cleanup;
+      effectHasCleanup13 = true;
+      return;
+    }
+    if (slot === 14i32) {
+      effectCleanup14 = move cleanup;
+      effectHasCleanup14 = true;
+      return;
+    }
+    if (slot === 15i32) {
+      effectCleanup15 = move cleanup;
+      effectHasCleanup15 = true;
+    }
+  }
+}
+function invokeCleanup(slot: i32): void {
+  unsafe {
+    if (slot === 0i32 && effectHasCleanup0) {
+      effectCleanup0!();
+      effectCleanup0 = undefined;
+      effectHasCleanup0 = false;
+      return;
+    }
+    if (slot === 1i32 && effectHasCleanup1) {
+      effectCleanup1!();
+      effectCleanup1 = undefined;
+      effectHasCleanup1 = false;
+      return;
+    }
+    if (slot === 2i32 && effectHasCleanup2) {
+      effectCleanup2!();
+      effectCleanup2 = undefined;
+      effectHasCleanup2 = false;
+      return;
+    }
+    if (slot === 3i32 && effectHasCleanup3) {
+      effectCleanup3!();
+      effectCleanup3 = undefined;
+      effectHasCleanup3 = false;
+      return;
+    }
+    if (slot === 4i32 && effectHasCleanup4) {
+      effectCleanup4!();
+      effectCleanup4 = undefined;
+      effectHasCleanup4 = false;
+      return;
+    }
+    if (slot === 5i32 && effectHasCleanup5) {
+      effectCleanup5!();
+      effectCleanup5 = undefined;
+      effectHasCleanup5 = false;
+      return;
+    }
+    if (slot === 6i32 && effectHasCleanup6) {
+      effectCleanup6!();
+      effectCleanup6 = undefined;
+      effectHasCleanup6 = false;
+      return;
+    }
+    if (slot === 7i32 && effectHasCleanup7) {
+      effectCleanup7!();
+      effectCleanup7 = undefined;
+      effectHasCleanup7 = false;
+      return;
+    }
+    if (slot === 8i32 && effectHasCleanup8) {
+      effectCleanup8!();
+      effectCleanup8 = undefined;
+      effectHasCleanup8 = false;
+      return;
+    }
+    if (slot === 9i32 && effectHasCleanup9) {
+      effectCleanup9!();
+      effectCleanup9 = undefined;
+      effectHasCleanup9 = false;
+      return;
+    }
+    if (slot === 10i32 && effectHasCleanup10) {
+      effectCleanup10!();
+      effectCleanup10 = undefined;
+      effectHasCleanup10 = false;
+      return;
+    }
+    if (slot === 11i32 && effectHasCleanup11) {
+      effectCleanup11!();
+      effectCleanup11 = undefined;
+      effectHasCleanup11 = false;
+      return;
+    }
+    if (slot === 12i32 && effectHasCleanup12) {
+      effectCleanup12!();
+      effectCleanup12 = undefined;
+      effectHasCleanup12 = false;
+      return;
+    }
+    if (slot === 13i32 && effectHasCleanup13) {
+      effectCleanup13!();
+      effectCleanup13 = undefined;
+      effectHasCleanup13 = false;
+      return;
+    }
+    if (slot === 14i32 && effectHasCleanup14) {
+      effectCleanup14!();
+      effectCleanup14 = undefined;
+      effectHasCleanup14 = false;
+      return;
+    }
+    if (slot === 15i32 && effectHasCleanup15) {
+      effectCleanup15!();
+      effectCleanup15 = undefined;
+      effectHasCleanup15 = false;
+    }
+  }
+}
+function releaseEffectSlot(slot: i32): void {
+  unsafe {
+    if (slot === 0i32) {
+      effectCallback0 = undefined;
+      effectCleanup0 = undefined;
+      effectHasCleanup0 = false;
+      effectUsed0 = false;
+      return;
+    }
+    if (slot === 1i32) {
+      effectCallback1 = undefined;
+      effectCleanup1 = undefined;
+      effectHasCleanup1 = false;
+      effectUsed1 = false;
+      return;
+    }
+    if (slot === 2i32) {
+      effectCallback2 = undefined;
+      effectCleanup2 = undefined;
+      effectHasCleanup2 = false;
+      effectUsed2 = false;
+      return;
+    }
+    if (slot === 3i32) {
+      effectCallback3 = undefined;
+      effectCleanup3 = undefined;
+      effectHasCleanup3 = false;
+      effectUsed3 = false;
+      return;
+    }
+    if (slot === 4i32) {
+      effectCallback4 = undefined;
+      effectCleanup4 = undefined;
+      effectHasCleanup4 = false;
+      effectUsed4 = false;
+      return;
+    }
+    if (slot === 5i32) {
+      effectCallback5 = undefined;
+      effectCleanup5 = undefined;
+      effectHasCleanup5 = false;
+      effectUsed5 = false;
+      return;
+    }
+    if (slot === 6i32) {
+      effectCallback6 = undefined;
+      effectCleanup6 = undefined;
+      effectHasCleanup6 = false;
+      effectUsed6 = false;
+      return;
+    }
+    if (slot === 7i32) {
+      effectCallback7 = undefined;
+      effectCleanup7 = undefined;
+      effectHasCleanup7 = false;
+      effectUsed7 = false;
+      return;
+    }
+    if (slot === 8i32) {
+      effectCallback8 = undefined;
+      effectCleanup8 = undefined;
+      effectHasCleanup8 = false;
+      effectUsed8 = false;
+      return;
+    }
+    if (slot === 9i32) {
+      effectCallback9 = undefined;
+      effectCleanup9 = undefined;
+      effectHasCleanup9 = false;
+      effectUsed9 = false;
+      return;
+    }
+    if (slot === 10i32) {
+      effectCallback10 = undefined;
+      effectCleanup10 = undefined;
+      effectHasCleanup10 = false;
+      effectUsed10 = false;
+      return;
+    }
+    if (slot === 11i32) {
+      effectCallback11 = undefined;
+      effectCleanup11 = undefined;
+      effectHasCleanup11 = false;
+      effectUsed11 = false;
+      return;
+    }
+    if (slot === 12i32) {
+      effectCallback12 = undefined;
+      effectCleanup12 = undefined;
+      effectHasCleanup12 = false;
+      effectUsed12 = false;
+      return;
+    }
+    if (slot === 13i32) {
+      effectCallback13 = undefined;
+      effectCleanup13 = undefined;
+      effectHasCleanup13 = false;
+      effectUsed13 = false;
+      return;
+    }
+    if (slot === 14i32) {
+      effectCallback14 = undefined;
+      effectCleanup14 = undefined;
+      effectHasCleanup14 = false;
+      effectUsed14 = false;
+      return;
+    }
+    if (slot === 15i32) {
+      effectCallback15 = undefined;
+      effectCleanup15 = undefined;
+      effectHasCleanup15 = false;
+      effectUsed15 = false;
+    }
+  }
+}
+function disposeHookSlot(slot: &mut HookSlot): void {
+  if (slot.effectSlot >= 0i32) {
+    invokeCleanup(slot.effectSlot);
+    releaseEffectSlot(slot.effectSlot);
+    slot.effectSlot = - 1i32;
+  }
+  if (slot.callbackSlot >= 0i32) {
+    releaseCallback(slot.callbackSlot);
+    slot.callbackSlot = - 1i32;
+  }
+  unsafe {
+    if (slot.value !== nullPointer<u8>()) {
+      rawFree(slot.value);
+      slot.value = nullPointer<u8>();
+    }
+  }
+  slot.initialized = false;
+  slot.valueSize = 0usize;
+  slot.dependencyHash = 0u64;
+  slot.hasDependencies = false;
+  slot.pending = false;
+}
+function discardEffect(effect: EffectCallback): void {
+}
+function useEffectSlot(kind: i32, effect: EffectCallback, dependencies: u64): void {
+  const index = currentSlot(kind);
+  const slot = slotAt(index);
+  const changed = !slot.hasDependencies || slot.dependencyHash !== dependencies;
+  if (slot.effectSlot<0i32) {
+    slot.effectSlot = reserveEffectSlot();
+  }
+  if (changed) {
+    if (slot.effectSlot >= 0i32) {
+      installEffect(slot.effectSlot, move effect);
+    }
+    slot.dependencyHash = dependencies;
+    slot.hasDependencies = true;
+    slot.pending = true;
+  } else {
+    discardEffect(move effect);
+  }
+}
+export function useEffect(effect: EffectCallback, dependencies: u64): void {
+  useEffectSlot(hookEffect, move effect, dependencies);
+}
+export function useLayoutEffect(effect: EffectCallback, dependencies: u64): void {
+  useEffectSlot(hookLayoutEffect, move effect, dependencies);
+}
+function flushEffectKind(kind: i32): void {
+  const runtime = store();
+  let cursor: usize = 0;
+  while (cursor<runtime.slots.length) {
+    const slot = runtime.slots.atMut(cursor);
+    if (slot !== undefined && slot!.pending && slot!.kind === kind) {
+      slot!.pending = false;
+      if (slot!.effectSlot >= 0i32) {
+        invokeCleanup(slot!.effectSlot);
+        const cleanup = invokeEffect(slot!.effectSlot);
+        installCleanup(slot!.effectSlot, move cleanup);
+      }
+    }
+    cursor = cursor + 1usize;
+  }
+}
+export function flushLayoutEffects(): void {
+  flushEffectKind(hookLayoutEffect);
+}
+export function flushPassiveEffects(): void {
+  flushEffectKind(hookEffect);
+}
+export function flushEffects(layout: bool): void {
+  if (layout) {
+    flushLayoutEffects();
+  } else {
+    flushPassiveEffects();
+  }
+}
+export function finishHookPass(): void {
+  const runtime = store();
+  let generation: u64 = 0;
+  unsafe {
+    generation = hookGeneration;
+  }
+  validateComponentShapes(generation);
+  let cursor: usize = 0;
+  while (cursor<runtime.slots.length) {
+    const slot = runtime.slots.atMut(cursor);
+    if (slot !== undefined && slot!.seenGeneration !== generation) {
+      disposeHookSlot(slot!);
+    }
+    cursor = cursor + 1usize;
+  }
+}
+export function debugHookEffectSlot(index: usize): i32 {
+  const runtime = store();
+  const slot = runtime.slots.at(index);
+  if (slot === undefined) {
+    return - 2i32;
+  }
+  return slot!.effectSlot;
+}
+export function debugHookKind(index: usize): i32 {
+  const runtime = store();
+  const slot = runtime.slots.at(index);
+  if (slot === undefined) {
+    return - 2i32;
+  }
+  return slot!.kind;
+}
+export function useMemo<T>(factory: () => T, dependencies: u64): T {
+  const index = currentSlot(hookMemo);
+  const slot = slotAt(index);
+  if (!slot.initialized || slot.dependencyHash !== dependencies) {
+    writeValue<T>(slot, factory());
+    slot.dependencyHash = dependencies;
+  }
+  return readValue<T>(slot);
+}
+export function useCallback(callback: () => void, dependencies: u64): () => void {
+  const index = currentSlot(hookCallback);
+  const slot = slotAt(index);
+  if (!slot.initialized || slot.dependencyHash !== dependencies) {
+    if (slot.callbackSlot >= 0i32) {
+      releaseCallback(slot.callbackSlot);
+    }
+    slot.callbackSlot = reserveCallback();
+    installCallback(slot.callbackSlot, move callback);
+    slot.dependencyHash = dependencies;
+    slot.initialized = true;
+  } else {
+    discardCallback(move callback);
+  }
+  return borrowCallback(slot.callbackSlot);
+}
+export struct Ref<T> {
+  public current: T;
+  private pointer: *mut u8;
+  public read(): T {
+    unsafe {
+      return *(this.pointer as *const T);
+    }
+  }
+  public write(value: T): void {
+    unsafe {
+      storeRaw<T>(this.pointer as *mut T, move value);
+    }
+  }
+}
+export function useRef<T>(initial: T): Ref<T> {
+  const index = currentSlot(hookRef);
+  const slot = slotAt(index);
+  if (!slot.initialized) {
+    unsafe {
+      slot.value = rawAlloc(sizeOf<T>());
+      storeRaw<T>(slot.value as *mut T, move initial);
+      slot.valueSize = sizeOf<T>();
+    }
+    slot.initialized = true;
+  }
+  const value = readValue<T>(slot);
+  return {
+    current: value, pointer: slot.value
+  };
+}
+export class Context<T> {
+  private value: T;
+  public constructor(initial: T) {
+    this.value = move initial;
+  }
+  public provide(value: T): void {
+    this.value = move value;
+    markUpdate();
+  }
+  public read(): T {
+    unsafe {
+      return *(( &this.value)as *const T);
+    }
+  }
+}
+export function createContext<T>(initial: T): Context<T> {
+  return new Context<T>(move initial);
+}
+export function useContext<T>(context: &Context<T >): T {
+  requireComponent();
+  return context.read();
+}
+export function useId(): u64 {
+  requireComponent();
+  const runtime = store();
+  const index = currentSlot(hookId);
+  const slot = slotAt(index);
+  if (!slot.initialized) {
+    runtime.idCounter = runtime.idCounter + 1u64;
+    writeValue<u64>(slot, runtime.idCounter);
+  }
+  return readValue<u64>(slot);
+}
+export function clearHooks(): void {
+  const runtime = store();
+  let cursor: usize = 0;
+  while (cursor<runtime.slots.length) {
+    const slot = runtime.slots.atMut(cursor);
+    if (slot !== undefined) {
+      disposeHookSlot(slot!);
+    }
+    cursor = cursor + 1usize;
+  }
+  runtime.slots.clear();
+  runtime.slots.shrinkToFit();
+  runtime.componentShapes.clear();
+  runtime.componentShapes.shrinkToFit();
+  runtime.updatePending = false;
+  runtime.updateCallback = noop;
+  runtime.hasUpdateCallback = false;
+  runtime.idCounter = 0u64;
+  unsafe {
+    integerStateValue = 0i32;
+    integerStateInitialized = false;
+    externalUpdatePending = false;
+    hookGeneration = 0u64;
+    batchDepth = 0i32;
+  }
+}

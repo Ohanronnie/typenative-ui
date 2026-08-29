@@ -1,0 +1,133 @@
+import { AccessibilityNode, AccessibilityTree } from "./accessibility/accessibility";
+import { Animation, Animator } from "./animation/animation";
+import { Button as NativeButton, Text as NativeText, View as NativeView, Window as NativeWindowComponent } from "./components";
+import { ButtonProps as CoreButtonProps, Style as CoreStyle, TextProps as CoreTextProps, ViewProps as CoreViewProps, WindowProps as CoreWindowProps } from "./core/types";
+import { batch as hookBatch, clearHooks, Context as HookContext, Cleanup, flushLayoutEffects, flushPassiveEffects, useCallback as hookUseCallback, useContext as hookUseContext, useEffect as hookUseEffect, useId as hookUseId, useIntReducer as hookUseIntReducer, useLayoutEffect as hookUseLayoutEffect, useMemo as hookUseMemo, useReducer as hookUseReducer, useRef as hookUseRef, useState as hookUseState, State as HookState, ReducerState as HookReducerState, Ref as HookRef, IntReducerState as HookIntReducerState } from "./hooks/hooks";
+import { Element as RuntimeElement, ElementRef as RuntimeElementRef } from "./jsx-runtime";
+import { NativeRenderer } from "./platform/macos";
+import { Reconciler as RuntimeReconciler, renderTree } from "./reconciler/reconciler";
+import { HeadlessRenderer as RuntimeHeadlessRenderer } from "./renderer/headless";
+import { Scheduler as RuntimeScheduler, UiScheduler as RuntimeUiScheduler } from "./scheduler/scheduler";
+
+export type State<T > = HookState<T>;
+export type ReducerState<StateValue, Action > = HookReducerState<StateValue, Action>;
+export type Ref<T > = HookRef<T>;
+export type IntReducerState = HookIntReducerState;
+export type EffectCleanup = Cleanup;
+export type Element = RuntimeElement;
+export type ElementRef = RuntimeElementRef;
+export type Style = CoreStyle;
+export type ButtonProps = CoreButtonProps;
+export type TextProps = CoreTextProps;
+export type ViewProps = CoreViewProps;
+export type WindowProps = CoreWindowProps;
+export type Context<T > = HookContext<T>;
+export type Reconciler = RuntimeReconciler;
+export type HeadlessRenderer = RuntimeHeadlessRenderer;
+export type Scheduler = RuntimeScheduler;
+export type UiScheduler = RuntimeUiScheduler;
+export function Button(props: ButtonProps): Element {
+  return NativeButton(move props);
+}
+export function Text(props: TextProps): Element {
+  return NativeText(move props);
+}
+export function View(props: ViewProps): Element {
+  return NativeView(move props);
+}
+export function Window(props: WindowProps): Element {
+  return NativeWindowComponent(move props);
+}
+export function useState<T>(initial: T): State<T> {
+  return hookUseState<T>(move initial);
+}
+export function useReducer<StateValue, Action>(reducer: (StateValue, Action) => StateValue, initial: StateValue): ReducerState<StateValue, Action> {
+  return hookUseReducer<StateValue, Action>(reducer, move initial);
+}
+export function useIntReducer(reducer: (i32, i32) => i32, initial: i32): IntReducerState {
+  return hookUseIntReducer(reducer, initial);
+}
+export function useEffect(effect: () => Cleanup, dependencies: u64): void {
+  hookUseEffect(move effect, dependencies);
+}
+export function useLayoutEffect(effect: () => Cleanup, dependencies: u64): void {
+  hookUseLayoutEffect(move effect, dependencies);
+}
+export function useMemo<T>(factory: () => T, dependencies: u64): T {
+  return hookUseMemo<T>(move factory, dependencies);
+}
+export function useCallback(callback: () => void, dependencies: u64): () => void {
+  return hookUseCallback(move callback, dependencies);
+}
+export function useRef<T>(initial: T): Ref<T> {
+  return hookUseRef<T>(move initial);
+}
+export function createContext<T>(initial: T): Context<T> {
+  return new HookContext<T>(move initial);
+}
+export function useContext<T>(context: &Context<T >): T {
+  return hookUseContext<T>(context);
+}
+export function useId(): u64 {
+  return hookUseId();
+}
+export function batch(callback: () => void): void {
+  hookBatch(move callback);
+}
+export function resolve(root: Element): Element {
+  return renderTree(move root);
+}
+export function createHeadlessRenderer(): RuntimeHeadlessRenderer {
+  return new RuntimeHeadlessRenderer();
+}
+export function mountHeadless(renderer: RuntimeHeadlessRenderer, root: Element): void {
+  renderer.mount(move root);
+}
+export function updateHeadless(renderer: RuntimeHeadlessRenderer, root: Element): void {
+  renderer.update(move root);
+}
+export function createReconciler(): RuntimeReconciler {
+  return new RuntimeReconciler();
+}
+export function createScheduler(): RuntimeScheduler {
+  return new RuntimeScheduler();
+}
+export function createUiScheduler(capacity: usize): RuntimeUiScheduler {
+  return new RuntimeUiScheduler(capacity);
+}
+export function createAnimation(startValue: f64, endValue: f64, duration: f64): Animation {
+  return new Animation(startValue, endValue, duration, 0i32);
+}
+export function createAnimator(): Animator {
+  return new Animator();
+}
+export function createAccessibilityTree(label: &str): AccessibilityTree {
+  return new AccessibilityTree(new AccessibilityNode(0i32, label));
+}
+export function createMacOSRenderer(): NativeRenderer {
+  return new NativeRenderer();
+}
+export function mountMacOS(renderer: NativeRenderer, root: Element, title: &str): bool {
+  return renderer.mount(renderTree(move root), title);
+}
+export function runApp(root: Element): i32 {
+  const renderer = new NativeRenderer();
+  if (!renderer.start()) {
+    root.dispose();
+    clearHooks();
+    return 1;
+  }
+  const resolved = renderTree(move root);
+  flushLayoutEffects();
+  flushPassiveEffects();
+  if (!renderer.mount(move resolved, "TypeNative Application")) {
+    clearHooks();
+    renderer.stop();
+    return 1;
+  }
+  renderer.run();
+  renderer.closeWindow();
+  clearHooks();
+  renderer.stop();
+  return 0;
+}

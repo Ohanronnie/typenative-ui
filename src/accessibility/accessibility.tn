@@ -1,0 +1,41 @@
+import { Array } from "std/collections";
+export enum AccessibilityRole {
+  None, Window, Group, StaticText, Button, Image, TextField, List,
+}
+export class AccessibilityNode {
+  public role: i32;
+  public label: &str;
+  public enabled: bool;
+  public selected: bool;
+  public children: Array<AccessibilityNode>;
+  public constructor(role: i32, label: &str) {
+    this.role = role;
+    this.label = label;
+    this.enabled = true;
+    this.selected = false;
+    this.children = new Array<AccessibilityNode>({
+      capacity: 0
+    });
+  }
+  public add(child: AccessibilityNode): void {
+    this.children.push(move child);
+  }
+  public childCount(): usize {
+    return this.children.length;
+  }
+  public setEnabled(value: bool): void {
+    this.enabled = value;
+  }
+  public setSelected(value: bool): void {
+    this.selected = value;
+  }
+}
+export class AccessibilityTree {
+  public root: AccessibilityNode;
+  public constructor(root: AccessibilityNode) {
+    this.root = move root;
+  }
+}
+export function accessibilityNode(role: i32, label: &str): AccessibilityNode {
+  return new AccessibilityNode(role, label);
+}

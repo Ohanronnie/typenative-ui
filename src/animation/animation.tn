@@ -1,0 +1,94 @@
+import { Array } from "std/collections";
+export enum Easing {
+  Linear, EaseIn, EaseOut, EaseInOut,
+}
+export class Animation {
+  private startValue: f64;
+  private endValue: f64;
+  private duration: f64;
+  private elapsed: f64;
+  private current: f64;
+  private easing: i32;
+  private running: bool;
+  public constructor(startValue: f64, endValue: f64, duration: f64, easing: i32) {
+    this.startValue = startValue;
+    this.endValue = endValue;
+    this.duration = duration;
+    this.elapsed = 0.0;
+    this.current = startValue;
+    this.easing = easing;
+    this.running = false;
+  }
+  public start(): void {
+    this.elapsed = 0.0;
+    this.current = this.startValue;
+    this.running = true;
+  }
+  public stop(): void {
+    this.running = false;
+  }
+  public tick(delta: f64): bool {
+    if (!this.running) {
+      return false;
+    }
+    this.elapsed = this.elapsed + delta;
+    let progress = 1.0;
+    if (this.duration > 0.0 && this.elapsed<this.duration) {
+      progress = this.elapsed / this.duration;
+    }
+    if (progress >= 1.0) {
+      progress = 1.0;
+      this.running = false;
+    }
+    const eased = ease(progress, this.easing);
+    this.current = this.startValue +(this.endValue - this.startValue) * eased;
+    return true;
+  }
+  public value(): f64 {
+    return this.current;
+  }
+  public isRunning(): bool {
+    return this.running;
+  }
+}
+export class Animator {
+  private animations: Array<Animation>;
+  public constructor() {
+    this.animations = new Array<Animation>({
+      capacity: 0
+    });
+  }
+  public add(animation: Animation): void {
+    this.animations.push(move animation);
+  }
+  public tick(delta: f64): usize {
+    let changed: usize = 0;
+    let index: usize = 0;
+    while (index<this.animations.length) {
+      const animation = this.animations.atMut(index);
+      if (animation !== undefined && animation!.tick(delta)) {
+        changed = changed + 1usize;
+      }
+      index = index + 1usize;
+    }
+    return changed;
+  }
+  public count(): usize {
+    return this.animations.length;
+  }
+}
+function ease(progress: f64, easing: i32): f64 {
+  if (easing === 1i32) {
+    return progress * progress;
+  }
+  if (easing === 2i32) {
+    return 1.0 -(1.0 - progress) *(1.0 - progress);
+  }
+  if (easing === 3i32) {
+    if (progress<0.5) {
+      return 2.0 * progress * progress;
+    }
+    return 1.0 -(( - 2.0 * progress + 2.0) *( - 2.0 * progress + 2.0)) / 2.0;
+  }
+  return progress;
+}

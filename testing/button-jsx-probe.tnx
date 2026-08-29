@@ -1,0 +1,27 @@
+import { String } from "std/string";
+import { Button } from "../src/components";
+import { EmptyProps } from "../src/core/types";
+import { dispatchPress, Element } from "../src/jsx-runtime";
+import { renderTree } from "../src/reconciler/reconciler";
+
+static mut presses: i32 = 0;
+function hit(): void {
+  unsafe {
+    presses = presses + 1i32;
+  }
+}
+function Root(props: EmptyProps): Element {
+  return <Button onPress={hit}>Go</Button>;
+}
+function main(): i32 {
+  const root = renderTree(<Button onPress={hit}>Go</Button>);
+  dispatchPress(root);
+  const valid = root.textLength() === 2usize;
+  root.dispose();
+  unsafe {
+    if (valid && presses === 1i32) {
+      return 0;
+    }
+  }
+  return 1;
+}

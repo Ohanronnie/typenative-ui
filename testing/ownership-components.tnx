@@ -1,0 +1,23 @@
+import { Text, View } from "../src/components";
+import { EmptyProps } from "../src/core/types";
+import { Element, hostChildAt, kindText } from "../src/jsx-runtime";
+import { renderTree } from "../src/reconciler/reconciler";
+
+function Root(props: EmptyProps): Element {
+  return <View>
+    <Text>Go</Text>
+  </View>;
+}
+function main(): i32 {
+  const root = renderTree(<Root />);
+  const child = hostChildAt(root, 0usize);
+  let valid = false;
+  if (child !== undefined) {
+    valid = child!.kind() === kindText() && child!.textLength() === 2usize;
+  }
+  root.dispose();
+  if (valid) {
+    return 0;
+  }
+  return 1;
+}

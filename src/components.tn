@@ -1,0 +1,127 @@
+import { Array } from "std/collections";
+import { ButtonProps, EmptyProps, Style, styleSetHeight, styleSetWidth, TextProps, ViewProps, WindowProps } from "./core/types";
+import { bindElementRef, buttonTypeId, createHost, createHostAction, createHostActionStyledWithStyle, createHostStyledWithStyle, createText, Element, ElementRef, fragmentElements, kindButton, kindText, kindView, kindWindow, leaf, StyleSnapshot, textTypeId, viewTypeId, windowTypeId } from "./jsx-runtime";
+
+function emptyChildren(): Array<Element> {
+  return new Array<Element>({
+    capacity: 0
+  });
+}
+function hostWithOneChild(kind: i32, typeId: u64, keyId: u64, text: &str, child: Element): Element {
+  const children = new Array<Element>({
+    capacity: 1
+  });
+  children.push(move child);
+  return createHost(kind, typeId, keyId, text, move children);
+}
+function snapshotStyle(style: &Style): StyleSnapshot {
+  return {
+    width: style.width, height: style.height, minWidth: style.minWidth, minHeight: style.minHeight, maxWidth: style.maxWidth, maxHeight: style.maxHeight, margin: style.margin, padding: style.padding, marginTop: style.marginTop, marginRight: style.marginRight, marginBottom: style.marginBottom, marginLeft: style.marginLeft, paddingTop: style.paddingTop, paddingRight: style.paddingRight, paddingBottom: style.paddingBottom, paddingLeft: style.paddingLeft, gap: style.gap, flex: style.flex, flexGrow: style.flexGrow, flexShrink: style.flexShrink, flexBasis: style.flexBasis, flexDirection: style.flexDirection, alignItems: style.alignItems, alignSelf: style.alignSelf, justifyContent: style.justifyContent, positionType: style.positionType, insetTop: style.insetTop, insetRight: style.insetRight, insetBottom: style.insetBottom, insetLeft: style.insetLeft, display: style.display, overflow: style.overflow, aspectRatio: style.aspectRatio, hasMarginEdges: style.hasMarginEdges, hasPaddingEdges: style.hasPaddingEdges, revision: style.revision,
+  };
+}
+function bindOptionalRef(element: Element, reference: &ElementRef | undefined): Element {
+  if (reference !== undefined) {
+    return bindElementRef(move element, reference!);
+  }
+  return move element;
+}
+export function View(props: ViewProps): Element {
+  const reference = props.elementRef;
+  const styled = props.style !== undefined;
+  let element: Element = leaf();
+  if (styled) {
+    const snapshot = snapshotStyle( &props.style!);
+    const child = move props.children;
+    const children = new Array<Element>({
+      capacity: 1
+    });
+    children.push(move child);
+    element = createHostStyledWithStyle(kindView(), viewTypeId(), snapshot.revision, "", move children, move snapshot);
+  } else {
+    const child = move props.children;
+    element = hostWithOneChild(kindView(), viewTypeId(), 0u64, "", move child);
+  }
+  return bindOptionalRef(move element, reference);
+}
+export function Text(props: TextProps): Element {
+  const reference = props.elementRef;
+  const element = createText(props.children.asStr());
+  return bindOptionalRef(move element, reference);
+}
+export function Button(props: ButtonProps): Element {
+  const reference = props.elementRef;
+  const label = props.children.asStr();
+  const action = move(): void => {
+    props.onPress();
+  };
+  const element = createHostAction(kindButton(), buttonTypeId(), 0u64, label, emptyChildren(), move action);
+  return bindOptionalRef(move element, reference);
+}
+export function Window(props: WindowProps): Element {
+  const reference = props.elementRef;
+  const title = props.title.asStr();
+  const child = move props.children;
+  let element: Element = leaf();
+  if (props.width !== undefined || props.height !== undefined) {
+    const style = new Style();
+    if (props.width !== undefined) {
+      styleSetWidth( &mut style, props.width!);
+    }
+    if (props.height !== undefined) {
+      styleSetHeight( &mut style, props.height!);
+    }
+    const snapshot = snapshotStyle( &style);
+    element = createHostStyledWithStyle(kindWindow(), windowTypeId(), snapshot.revision, title, move singleChild(child), move snapshot);
+  } else {
+    element = hostWithOneChild(kindWindow(), windowTypeId(), 0u64, title, move child);
+  }
+  return bindOptionalRef(move element, reference);
+}
+function singleChild(child: Element): Array<Element> {
+  const children = new Array<Element>({
+    capacity: 1
+  });
+  children.push(move child);
+  return move children;
+}
+export function emptyView(props: EmptyProps): Element {
+  return createHost(kindView(), viewTypeId(), 0u64, "", emptyChildren());
+}
+export function createTextNode(value: &str): Element {
+  return createHost(kindText(), textTypeId(), 0u64, value, emptyChildren());
+}
+export function styledView(style: &Style, child: Element): Element {
+  const snapshot = snapshotStyle(style);
+  const children = new Array<Element>({
+    capacity: 1
+  });
+  children.push(move child);
+  return createHostStyledWithStyle(kindView(), viewTypeId(), snapshot.revision, "", move children, move snapshot);
+}
+export function stack(style: &Style, children: Array<Element >): Element {
+  const snapshot = snapshotStyle(style);
+  return createHostStyledWithStyle(kindView(), viewTypeId(), snapshot.revision, "", move children, move snapshot);
+}
+export function fragment(children: Array<Element >): Element {
+  return fragmentElements(move children);
+}
+export function row(children: Array<Element >): Element {
+  const style = new Style();
+  style.flexDirection = 0i32;
+  return stack( &style, move children);
+}
+export function column(children: Array<Element >): Element {
+  const style = new Style();
+  style.flexDirection = 1i32;
+  return stack( &style, move children);
+}
+export function button(label: &str, action: () => void): Element {
+  return createHostAction(kindButton(), buttonTypeId(), 0u64, label, emptyChildren(), move action);
+}
+export function styledButton(style: &Style, label: &str, action: () => void): Element {
+  const snapshot = snapshotStyle(style);
+  return createHostActionStyledWithStyle(kindButton(), buttonTypeId(), snapshot.revision, label, emptyChildren(), move action, move snapshot);
+}
+export function window(title: &str, child: Element): Element {
+  return hostWithOneChild(kindWindow(), windowTypeId(), 0u64, title, move child);
+}

@@ -1,0 +1,25 @@
+export function mutationCreate(): i32 {
+  return 1;
+}
+export function mutationInsert(): i32 {
+  return 2;
+}
+export function mutationMove(): i32 {
+  return 3;
+}
+export function mutationUpdate(): i32 {
+  return 4;
+}
+export function mutationRemove(): i32 {
+  return 5;
+}
+export function mutationReplace(): i32 {
+  return 6;
+}
+export struct Mutation {
+  public kind: i32;
+  public nodeId: i32;
+  public parentId: i32;
+  public fromIndex: usize;
+  public toIndex: usize;
+}

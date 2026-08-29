@@ -1,0 +1,98 @@
+import { u64ToUsize, usizeToU64 } from "std/alloc";
+import { BytesMut } from "std/bytes";
+import { Array } from "std/collections";
+import { c_size } from "std/ffi";
+import { createHost, fragmentElements, hostChildAt, kindText, textTypeId, Element } from "../src/jsx-runtime";
+import { HeadlessRenderer } from "../src/renderer/headless";
+
+declare extern "C" {
+  function tn_console_write(fd: i32, bytes: *const u8, length: c_size): i32;
+  function tn_runtime_allocation_count(): u64;
+  function tn_runtime_reset_allocation_count(): void;
+}
+function itemCount(): usize {
+  return 10000;
+}
+function emptyChildren(): Array<Element> {
+  return new Array<Element>({
+    capacity: 0usize,
+  });
+}
+function keyedItems(reversed: bool, changed: bool): Element {
+  const children = new Array<Element>({
+    capacity: itemCount(),
+  });
+  let index: usize = 0;
+  while (index<itemCount()) {
+    let sourceIndex = index;
+    if (reversed) {
+      sourceIndex = itemCount() - index - 1usize;
+    }
+    const key = usizeToU64(sourceIndex + 1usize);
+    let label: &str = "item";
+    if (changed && sourceIndex === 9999usize) {
+      label = "changed";
+    }
+    children.push(createHost(kindText(), textTypeId(), key, label, emptyChildren()));
+    index = index + 1usize;
+  }
+  return fragmentElements(move children);
+}
+function reportAllocations(value: u64): void {
+  const buffer = new BytesMut({
+    capacity: 64usize,
+  });
+  buffer.appendAscii("allocations=");
+  buffer.appendUnsignedDecimal(u64ToUsize(value));
+  buffer.appendAscii("\n");
+  unsafe {
+    tn_console_write(1i32, buffer.nativePointer()as *const u8, buffer.length);
+  }
+}
+function main(): i32 {
+  unsafe {
+    tn_runtime_reset_allocation_count();
+  }
+  using renderer = new HeadlessRenderer();
+  const initial = keyedItems(false, false);
+  renderer.mount(move initial);
+  if (renderer.nodeCount() !== itemCount() + 1usize) {
+    renderer.unmount();
+    return 10;
+  }
+  const same = keyedItems(false, false);
+  renderer.update(move same);
+  if (renderer.mutationCount() !== 0usize) {
+    renderer.unmount();
+    return 11;
+  }
+  const reversed = keyedItems(true, false);
+  renderer.update(move reversed);
+  if (renderer.mutationCount() !== itemCount()) {
+    renderer.unmount();
+    return 12;
+  }
+  const reversedRoot = renderer.rootElement();
+  const first = hostChildAt(reversedRoot, 0usize);
+  if (first === undefined || first!.keyId() !== usizeToU64(itemCount())) {
+    renderer.unmount();
+    return 13;
+  }
+  renderer.update(keyedItems(true, true));
+  if (renderer.mutationCount() !== 1usize) {
+    renderer.unmount();
+    return 14;
+  }
+  renderer.update(keyedItems(true, true));
+  if (renderer.mutationCount() !== 0usize) {
+    renderer.unmount();
+    return 15;
+  }
+  renderer.unmount();
+  let allocations = 0u64;
+  unsafe {
+    allocations = tn_runtime_allocation_count();
+  }
+  reportAllocations(allocations);
+  return 0;
+}

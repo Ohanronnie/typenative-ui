@@ -1,0 +1,22 @@
+import { runI32, TaskGroup } from "std/async";
+import { sleep } from "std/thread";
+import { Duration } from "std/time";
+
+async function delayedValue(): Promise<i32, never> {
+  sleep(Duration.fromMilliseconds(2));
+  return 42i32;
+}
+async function cancellationProbe(): Promise<i32, never> {
+  await using group = new TaskGroup();
+  const task = group.spawn(delayedValue());
+  group.cancel();
+  const cancelled = group.isCancelled();
+  await group.close();
+  if (!cancelled) {
+    return 10i32;
+  }
+  return 0i32;
+}
+function main(): i32 {
+  return runI32(cancellationProbe());
+}

@@ -1,0 +1,4 @@
+{
+  "entry": "../async.tn",
+  "target": "aarch64-apple-darwin"
+}

@@ -1,0 +1,18 @@
+import { LayoutNode, layout } from "./layout";
+export struct YogaVersion {
+  public major: i32;
+  public minor: i32;
+  public patch: i32;
+}
+export function pinnedYogaVersion(): YogaVersion {
+  return {
+    major: 3i32, minor: 2i32, patch: 1i32,
+  };
+}
+export class YogaLayout {
+  public constructor() {
+  }
+  public calculate(root: &mut LayoutNode, width: f32, height: f32): void {
+    layout(root, width, height);
+  }
+}

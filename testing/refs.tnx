@@ -1,0 +1,26 @@
+import { String } from "std/string";
+import { Button } from "../src/components";
+import { bindElementRef, ElementRef, kindButton } from "../src/jsx-runtime";
+
+function hit(): void {
+}
+function main(): i32 {
+  const reference = new ElementRef();
+  const element = bindElementRef(Button({
+    children: String("Ref"), onPress: hit,
+  }), &reference);
+  if (!reference.isAttached()) {
+    element.dispose();
+    return 10;
+  }
+  const current = reference.current();
+  if (current.kind() !== kindButton() || current.textLength() !== 3usize) {
+    element.dispose();
+    return 11;
+  }
+  element.dispose();
+  if (reference.isAttached()) {
+    return 12;
+  }
+  return 0;
+}

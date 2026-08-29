@@ -1,0 +1,66 @@
+import { Array } from "std/collections";
+import { createHost, createText, fragmentElements, hostChildAt, kindText, textTypeId, Element } from "../src/jsx-runtime";
+import { mutationCreate, mutationMove, mutationUpdate } from "../src/reconciler/mutations";
+import { renderTree } from "../src/reconciler/reconciler";
+import { HeadlessRenderer } from "../src/renderer/headless";
+
+function emptyChildren(): Array<Element> {
+  return new Array<Element>({
+    capacity: 0usize,
+  });
+}
+function keyedText(key: u64, value: &str): Element {
+  return createHost(kindText(), textTypeId(), key, value, emptyChildren());
+}
+function keyedTree(reversed: bool, changed: bool): Element {
+  const children = new Array<Element>({
+    capacity: 3usize,
+  });
+  if (reversed) {
+    children.push(keyedText(3u64, "three"));
+    children.push(keyedText(2u64, "two"));
+    children.push(keyedText(1u64, changed?"one!": "one"));
+  } else {
+    children.push(keyedText(1u64, "one"));
+    children.push(keyedText(2u64, "two"));
+    children.push(keyedText(3u64, "three"));
+  }
+  return fragmentElements(move children);
+}
+function main(): i32 {
+  let result = 0i32;
+  {
+    using renderer = new HeadlessRenderer();
+    renderer.mount(keyedTree(false, false));
+    if (renderer.mutationCount() !== 4usize || renderer.lastMutationKind() !== mutationCreate()) {
+      result = 11i32;
+    }
+    if (result === 0i32) {
+      renderer.update(keyedTree(false, false));
+      if (renderer.mutationCount() !== 0usize) {
+        result = 12i32;
+      }
+    }
+    if (result === 0i32) {
+      renderer.update(keyedTree(true, false));
+      if (renderer.mutationCount() !== 2usize || renderer.lastMutationKind() !== mutationMove()) {
+        result = 13i32;
+      }
+    }
+    if (result === 0i32) {
+      renderer.update(keyedTree(true, true));
+      if (renderer.mutationCount() !== 1usize || renderer.lastMutationKind() !== mutationUpdate()) {
+        result = 14i32;
+      }
+    }
+    if (result === 0i32) {
+      const root = renderer.rootElement();
+      const first = hostChildAt(root, 0usize);
+      if (first === undefined || first!.textLength() !== 5usize) {
+        result = 15i32;
+      }
+    }
+    renderer.unmount();
+  }
+  return result;
+}

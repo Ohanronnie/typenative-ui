@@ -1,0 +1,11 @@
+{
+  "name": "Yoga",
+  "repository": "https://github.com/facebook/yoga",
+  "resolvedRepository": "https://github.com/facebook/yoga",
+  "tag": "v3.2.1",
+  "commit": "042f5013152eb81c1552dec945b88f7b95ca350f",
+  "archive": "https://github.com/react/yoga/archive/refs/tags/v3.2.1.tar.gz",
+  "sha256": "86b399ac31fd820d8ffa823c3fae31bb690b6fc45301b2a8a966c09b5a088b55",
+  "license": "MIT",
+  "purpose": "External maintained Flexbox layout engine; its source is never copied into this repository."
+}

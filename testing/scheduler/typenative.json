@@ -1,0 +1,4 @@
+{
+  "entry": "../scheduler.tn",
+  "target": "aarch64-apple-darwin"
+}

@@ -1,0 +1,31 @@
+import { EmptyProps } from "../src/core/types";
+import { clearHooks } from "../src/hooks/hooks";
+import { Button, createHeadlessRenderer, createReconciler, createScheduler, createUiScheduler, Element, Text, View, Window } from "../src/index";
+import { kindText } from "../src/jsx-runtime";
+
+function hit(): void {
+}
+function Root(props: EmptyProps): Element {
+  return <Window title="Public API">
+    <View>
+      <Text>Public</Text>
+      <Button onPress={hit}>Go</Button>
+    </View>
+  </Window>;
+}
+function main(): i32 {
+  using renderer = createHeadlessRenderer();
+  renderer.mount(<Root />);
+  if (renderer.queryFirst(kindText()) === undefined) {
+    renderer.unmount();
+    return 10;
+  }
+  const reconciler = createReconciler();
+  reconciler.unmount();
+  const scheduler = createScheduler();
+  scheduler.clear();
+  createUiScheduler(2usize);
+  renderer.unmount();
+  clearHooks();
+  return 0;
+}

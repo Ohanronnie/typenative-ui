@@ -1,0 +1,1502 @@
+import { nullPointer, rawAlloc, rawFree, sizeOf, storeRaw } from "std/alloc";
+import { Array } from "std/collections";
+import { c_size } from "std/ffi";
+
+declare extern "C" {
+  function tn_bytes_copy_to_at(source: *const u8, sourceLength: c_size, sourceOffset: c_size, count: c_size, destination: *mut u8, destinationLength: c_size, destinationOffset: c_size): i32;
+  function tn_bytes_copy_at(source: *const u8, length: c_size, offset: c_size, count: c_size, destination: *mut u8): i32;
+  function tn_bytes_write_u8(bytes: *mut u8, length: c_size, index: c_size, value: u8): i32;
+  function tn_bytes_hash(bytes: *const u8, length: c_size): u64;
+  function tn_string_length(bytes: *const u8): c_size;
+}
+export function kindEmpty(): i32 {
+  return 0;
+}
+export function kindFunction(): i32 {
+  return 1;
+}
+export function kindView(): i32 {
+  return 2;
+}
+export function kindText(): i32 {
+  return 3;
+}
+export function kindButton(): i32 {
+  return 4;
+}
+export function kindWindow(): i32 {
+  return 5;
+}
+export function kindFragment(): i32 {
+  return 6;
+}
+export function viewTypeId(): u64 {
+  return 1001;
+}
+export function textTypeId(): u64 {
+  return 1002;
+}
+export function buttonTypeId(): u64 {
+  return 1003;
+}
+export function windowTypeId(): u64 {
+  return 1004;
+}
+export function fragmentTypeId(): u64 {
+  return 1005;
+}
+struct ElementRecord {
+  public kind: i32;
+  public typeId: u64;
+  public keyId: u64;
+  public sourceId: u64;
+  public revision: u64;
+  public text: *mut u8;
+  public textLength: usize;
+  public hasText: bool;
+  public renderSlot: i32;
+  public actionSlot: i32;
+  public children: *mut u8;
+  public childCount: usize;
+  public firstChild: *mut u8;
+  public secondChild: *mut u8;
+  public childMode: i32;
+  public nativeHandle: *mut u8;
+  public hasNativeHandle: bool;
+  public style: *mut u8;
+  public hasStyle: bool;
+  public elementRef: *mut u8;
+  public hasElementRef: bool;
+}
+export struct StyleSnapshot {
+  public width: f32;
+  public height: f32;
+  public minWidth: f32;
+  public minHeight: f32;
+  public maxWidth: f32;
+  public maxHeight: f32;
+  public margin: f32;
+  public padding: f32;
+  public marginTop: f32;
+  public marginRight: f32;
+  public marginBottom: f32;
+  public marginLeft: f32;
+  public paddingTop: f32;
+  public paddingRight: f32;
+  public paddingBottom: f32;
+  public paddingLeft: f32;
+  public gap: f32;
+  public flex: f32;
+  public flexGrow: f32;
+  public flexShrink: f32;
+  public flexBasis: f32;
+  public flexDirection: i32;
+  public alignItems: i32;
+  public alignSelf: i32;
+  public justifyContent: i32;
+  public positionType: i32;
+  public insetTop: f32;
+  public insetRight: f32;
+  public insetBottom: f32;
+  public insetLeft: f32;
+  public display: i32;
+  public overflow: i32;
+  public aspectRatio: f32;
+  public hasMarginEdges: bool;
+  public hasPaddingEdges: bool;
+  public revision: u64;
+}
+struct ChildLink {
+  public value: *mut u8;
+  public next: *mut u8;
+}
+export struct Element {
+  private pointer: *mut u8;
+  public static unsafe fromRaw(pointer: *mut u8): Element {
+    return {
+      pointer: pointer
+    };
+  }
+  public unsafe rawForRuntime(): *mut u8 {
+    return this.pointer;
+  }
+  public unsafe takeRawForRuntime(): *mut u8 {
+    const output = this.pointer;
+    this.pointer = nullRaw();
+    return output;
+  }
+  public isEmpty(): bool {
+    return this.pointer === nullRaw();
+  }
+  public renderNow(): Element {
+    return renderElement(move this);
+  }
+  public dispose(): void {
+    if (this.pointer !== nullRaw()) {
+      disposeElement(move this);
+      this.pointer = nullRaw();
+    }
+  }
+  public kind(): i32 {
+    if (this.pointer === nullRaw()) {
+      return kindEmpty();
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).kind;
+    }
+  }
+  public typeId(): u64 {
+    if (this.pointer === nullRaw()) {
+      return 0;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).typeId;
+    }
+  }
+  public keyId(): u64 {
+    if (this.pointer === nullRaw()) {
+      return 0;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).keyId;
+    }
+  }
+  public sourceId(): u64 {
+    if (this.pointer === nullRaw()) {
+      return 0;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).sourceId;
+    }
+  }
+  public revision(): u64 {
+    if (this.pointer === nullRaw()) {
+      return 0;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).revision;
+    }
+  }
+  public renderSlotId(): i32 {
+    if (this.pointer === nullRaw()) {
+      return - 1i32;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).renderSlot;
+    }
+  }
+  public childCount(): usize {
+    if (this.pointer === nullRaw()) {
+      return 0;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).childCount;
+    }
+  }
+  public textLength(): usize {
+    if (this.pointer === nullRaw()) {
+      return 0;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).textLength;
+    }
+  }
+  public textHash(): u64 {
+    if (this.pointer === nullRaw()) {
+      return 0;
+    }
+    unsafe {
+      const stored = & *(this.pointer as *const ElementRecord);
+      return tn_bytes_hash(stored.text as *const u8, stored.textLength as c_size);
+    }
+  }
+  public unsafe textPointer(): *const u8 {
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).text as *const u8;
+    }
+  }
+  public unsafe setNativeHandle(handle: *mut u8): void {
+    if (this.pointer === nullRaw()) {
+      return;
+    }
+    unsafe {
+      writePointerAt(this.pointer, 112usize, handle);
+      tn_bytes_write_u8(this.pointer, sizeOf<ElementRecord>()as c_size, 120, 1u8);
+    }
+  }
+  public unsafe nativeHandle(): *mut u8 {
+    if (this.pointer === nullRaw()) {
+      return nullRaw();
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).nativeHandle;
+    }
+  }
+  public unsafe clearNativeHandle(): void {
+    if (this.pointer === nullRaw()) {
+      return;
+    }
+    unsafe {
+      writePointerAt(this.pointer, 112usize, nullRaw());
+      tn_bytes_write_u8(this.pointer, sizeOf<ElementRecord>()as c_size, 120, 0u8);
+    }
+  }
+  public hasNativeHandle(): bool {
+    if (this.pointer === nullRaw()) {
+      return false;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).hasNativeHandle;
+    }
+  }
+  public actionSlotId(): i32 {
+    if (this.pointer === nullRaw()) {
+      return - 1i32;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).actionSlot;
+    }
+  }
+  public hasStyle(): bool {
+    if (this.pointer === nullRaw()) {
+      return false;
+    }
+    unsafe {
+      return( & *(this.pointer as *const ElementRecord)).hasStyle;
+    }
+  }
+  public styleSnapshot(): StyleSnapshot {
+    if (this.pointer === nullRaw()) {
+      return defaultStyleSnapshot();
+    }
+    unsafe {
+      const stored = & *(this.pointer as *const ElementRecord);
+      if (!stored.hasStyle || stored.style === nullRaw()) {
+        return defaultStyleSnapshot();
+      }
+      return *(stored.style as *const StyleSnapshot);
+    }
+  }
+}
+export class ElementRef {
+  private pointer: *mut u8;
+  public constructor() {
+    this.pointer = nullRaw();
+  }
+  public attach(element: Element): void {
+    unsafe {
+      this.pointer = element.rawForRuntime();
+    }
+  }
+  public detach(): void {
+    this.pointer = nullRaw();
+  }
+  public isAttached(): bool {
+    return this.pointer !== nullRaw();
+  }
+  public current(): Element {
+    unsafe {
+      return Element.fromRaw(this.pointer);
+    }
+  }
+  public unsafe rawPointer(): *mut u8 {
+    unsafe {
+      return(this)as *mut u8;
+    }
+  }
+}
+export type ElementChild = Element;
+struct ComponentHolder<Props> {
+  public value: (Props) => Element;
+}
+static mut renderUsed0: bool = false;
+static mut renderUsed1: bool = false;
+static mut renderUsed2: bool = false;
+static mut renderUsed3: bool = false;
+static mut renderUsed4: bool = false;
+static mut renderUsed5: bool = false;
+static mut renderUsed6: bool = false;
+static mut renderUsed7: bool = false;
+static mut renderCallback0: (() => void) | undefined = undefined;
+static mut renderCallback1: (() => void) | undefined = undefined;
+static mut renderCallback2: (() => void) | undefined = undefined;
+static mut renderCallback3: (() => void) | undefined = undefined;
+static mut renderCallback4: (() => void) | undefined = undefined;
+static mut renderCallback5: (() => void) | undefined = undefined;
+static mut renderCallback6: (() => void) | undefined = undefined;
+static mut renderCallback7: (() => void) | undefined = undefined;
+static mut renderOutput0: *mut u8 | undefined = undefined;
+static mut renderOutput1: *mut u8 | undefined = undefined;
+static mut renderOutput2: *mut u8 | undefined = undefined;
+static mut renderOutput3: *mut u8 | undefined = undefined;
+static mut renderOutput4: *mut u8 | undefined = undefined;
+static mut renderOutput5: *mut u8 | undefined = undefined;
+static mut renderOutput6: *mut u8 | undefined = undefined;
+static mut renderOutput7: *mut u8 | undefined = undefined;
+static mut actionUsed0: bool = false;
+static mut actionUsed1: bool = false;
+static mut actionUsed2: bool = false;
+static mut actionUsed3: bool = false;
+static mut actionUsed4: bool = false;
+static mut actionUsed5: bool = false;
+static mut actionUsed6: bool = false;
+static mut actionUsed7: bool = false;
+static mut actionCallback0: (() => void) | undefined = undefined;
+static mut actionCallback1: (() => void) | undefined = undefined;
+static mut actionCallback2: (() => void) | undefined = undefined;
+static mut actionCallback3: (() => void) | undefined = undefined;
+static mut actionCallback4: (() => void) | undefined = undefined;
+static mut actionCallback5: (() => void) | undefined = undefined;
+static mut actionCallback6: (() => void) | undefined = undefined;
+static mut actionCallback7: (() => void) | undefined = undefined;
+static mut activeComponentSource: u64 = 0;
+static mut activeComponentKey: u64 = 0;
+static mut activeHookIndex: i32 = 0;
+static mut focusedElement: *mut u8 = nullPointer<u8>();
+function nullRaw(): *mut u8 {
+  unsafe {
+    return nullPointer<u8>();
+  }
+}
+function nullConst(): *const u8 {
+  unsafe {
+    return nullPointer<u8>()as *const u8;
+  }
+}
+unsafe function writePointerAt(target: *mut u8, offset: usize, value: *mut u8): void {
+  unsafe {
+    const valuePointer =( &value)as *const u8;
+    tn_bytes_copy_to_at(valuePointer, 8, 0, 8, target, sizeOf<ElementRecord>()as c_size, offset as c_size);
+  }
+}
+unsafe function writeUsizeAt(target: *mut u8, offset: usize, value: usize): void {
+  unsafe {
+    const valuePointer =( &value)as *const u8;
+    tn_bytes_copy_to_at(valuePointer, 8, 0, 8, target, sizeOf<ElementRecord>()as c_size, offset as c_size);
+  }
+}
+unsafe function writeU64At(target: *mut u8, offset: usize, value: u64): void {
+  unsafe {
+    const valuePointer =( &value)as *const u8;
+    tn_bytes_copy_to_at(valuePointer, 8, 0, 8, target, sizeOf<ElementRecord>()as c_size, offset as c_size);
+  }
+}
+function keyIdentity(key: string | undefined): u64 {
+  if (key === undefined) {
+    return 0;
+  }
+  unsafe {
+    const pointer = key!as *const u8;
+    const value = tn_bytes_hash(pointer, tn_string_length(pointer));
+    if (value === 0u64) {
+      return 1;
+    }
+    return value;
+  }
+}
+function keyTextIdentity(key: &str): u64 {
+  unsafe {
+    const value = tn_bytes_hash(key as *const u8, key.byteLength as c_size);
+    if (value === 0u64) {
+      return 1;
+    }
+    return value;
+  }
+}
+function sourceForSlot(slot: i32, typeId: u64): u64 {
+  if (slot === 0i32) {
+    return typeId + 1u64;
+  }
+  if (slot === 1i32) {
+    return typeId + 2u64;
+  }
+  if (slot === 2i32) {
+    return typeId + 3u64;
+  }
+  if (slot === 3i32) {
+    return typeId + 4u64;
+  }
+  if (slot === 4i32) {
+    return typeId + 5u64;
+  }
+  if (slot === 5i32) {
+    return typeId + 6u64;
+  }
+  if (slot === 6i32) {
+    return typeId + 7u64;
+  }
+  return typeId + 8u64;
+}
+export function beginComponent(source: u64, key: u64): void {
+  unsafe {
+    activeComponentSource = source;
+    activeComponentKey = key;
+    activeHookIndex = 0i32;
+  }
+}
+export function endComponent(): void {
+  unsafe {
+    activeComponentSource = 0u64;
+    activeComponentKey = 0u64;
+    activeHookIndex = 0i32;
+  }
+}
+export function currentComponentSource(): u64 {
+  unsafe {
+    return activeComponentSource;
+  }
+}
+export function currentComponentKey(): u64 {
+  unsafe {
+    return activeComponentKey;
+  }
+}
+export function nextHookIndex(): i32 {
+  unsafe {
+    const index = activeHookIndex;
+    activeHookIndex = activeHookIndex + 1i32;
+    return index;
+  }
+}
+function emptyChildren(): Array<Element> {
+  return new Array<Element>({
+    capacity: 0
+  });
+}
+function defaultStyleSnapshot(): StyleSnapshot {
+  return {
+    width: 0.0f32, height: 0.0f32, minWidth: 0.0f32, minHeight: 0.0f32, maxWidth: 0.0f32, maxHeight: 0.0f32, margin: 0.0f32, padding: 0.0f32, marginTop: 0.0f32, marginRight: 0.0f32, marginBottom: 0.0f32, marginLeft: 0.0f32, paddingTop: 0.0f32, paddingRight: 0.0f32, paddingBottom: 0.0f32, paddingLeft: 0.0f32, gap: 0.0f32, flex: 0.0f32, flexGrow: 0.0f32, flexShrink: 1.0f32, flexBasis: 0.0f32, flexDirection: 1i32, alignItems: 4i32, alignSelf: 0i32, justifyContent: 0i32, positionType: 0i32, insetTop: 0.0f32, insetRight: 0.0f32, insetBottom: 0.0f32, insetLeft: 0.0f32, display: 0i32, overflow: 0i32, aspectRatio: 0.0f32, hasMarginEdges: false, hasPaddingEdges: false, revision: 0u64,
+  };
+}
+unsafe function storeStyleSnapshot(style: StyleSnapshot): *mut u8 {
+  unsafe {
+    const pointer = rawAlloc(sizeOf<StyleSnapshot>());
+    storeRaw<StyleSnapshot>(pointer as *mut StyleSnapshot, move style);
+    return pointer;
+  }
+}
+function attachStyleSnapshot(element: Element, style: StyleSnapshot): Element {
+  let pointer: *mut u8 = nullRaw();
+  let stylePointer: *mut u8 = nullRaw();
+  unsafe {
+    pointer = element.rawForRuntime();
+    stylePointer = storeStyleSnapshot(move style);
+    writePointerAt(pointer, 128usize, stylePointer);
+    tn_bytes_write_u8(pointer, sizeOf<ElementRecord>()as c_size, 136, 1u8);
+  }
+  return move element;
+}
+export function bindElementRef(element: Element, reference: &ElementRef): Element {
+  reference.attach(element);
+  unsafe {
+    writePointerAt(element.rawForRuntime(), 144usize, reference as *mut u8);
+    tn_bytes_write_u8(element.rawForRuntime(), sizeOf<ElementRecord>()as c_size, 152, 1u8);
+  }
+  return move element;
+}
+function storeText(value: &str): *mut u8 {
+  const length = value.byteLength;
+  unsafe {
+    const bytes = rawAlloc(length + 1usize);
+    if (length > 0usize) {
+      tn_bytes_copy_to_at(value as *const u8, length as c_size, 0, length as c_size, bytes,(length + 1usize)as c_size, 0);
+    }
+    tn_bytes_write_u8(bytes,(length + 1usize)as c_size, length as c_size, 0u8);
+    return bytes;
+  }
+}
+unsafe function storeBytes(source: *const u8, length: usize): *mut u8 {
+  unsafe {
+    const bytes = rawAlloc(length + 1usize);
+    if (length > 0usize) {
+      tn_bytes_copy_to_at(source, length as c_size, 0, length as c_size, bytes,(length + 1usize)as c_size, 0);
+    }
+    tn_bytes_write_u8(bytes,(length + 1usize)as c_size, length as c_size, 0u8);
+    return bytes;
+  }
+}
+unsafe function rawChildAt(source: *const u8, sourceLength: usize, offset: usize): *mut u8 {
+  unsafe {
+    const output = rawAlloc(8usize);
+    if (tn_bytes_copy_at(source, sourceLength as c_size, offset as c_size, sizeOf< *mut u8>()as c_size, output) !== 0) {
+      rawFree(output);
+      return nullRaw();
+    }
+    const value = *(output as *const *mut u8);
+    rawFree(output);
+    return value;
+  }
+}
+function storeChildren(children: Array<Element >): *mut u8 {
+  let head = nullRaw();
+  while (children.length > 0usize) {
+    const child = children.pop();
+    if (child === undefined) {
+      break;
+    }
+    const value = rawPointer(child!);
+    unsafe {
+      const link = rawAlloc(sizeOf<ChildLink>());
+      storeRaw<ChildLink>(link as *mut ChildLink, {
+        value: value, next: head,
+      });
+      head = link;
+    }
+  }
+  return head;
+}
+function allocateRecord(value: ElementRecord): Element {
+  unsafe {
+    const pointer = rawAlloc(sizeOf<ElementRecord>());
+    storeRaw<ElementRecord>(pointer as *mut ElementRecord, move value);
+    return Element.fromRaw(pointer);
+  }
+}
+function makeRecord(kind: i32, typeId: u64, keyId: u64, revision: u64, text: &str, renderSlot: i32, actionSlot: i32, children: Array<Element >): Element {
+  const count = children.length;
+  const childHead = storeChildren(move children);
+  return allocateRecord({
+    kind: kind, typeId: typeId, keyId: keyId, sourceId: typeId, revision: revision, text: storeText(text), textLength: text.byteLength, hasText: true, renderSlot: renderSlot, actionSlot: actionSlot, children: childHead, childCount: count, firstChild: nullRaw(), secondChild: nullRaw(), childMode: 0i32, nativeHandle: nullRaw(), hasNativeHandle: false, style: nullRaw(), hasStyle: false, elementRef: nullRaw(), hasElementRef: false,
+  });
+}
+function makeRecordStyled(kind: i32, typeId: u64, keyId: u64, revision: u64, text: &str, renderSlot: i32, actionSlot: i32, children: Array<Element>, style: StyleSnapshot): Element {
+  return attachStyleSnapshot(makeRecord(kind, typeId, keyId, revision, text, renderSlot, actionSlot, move children), move style);
+}
+function allocateFixedRecord(kind: i32, typeId: u64, keyId: u64, revision: u64, first: *mut u8, second: *mut u8, count: usize): Element {
+  return allocateRecord({
+    kind: kind, typeId: typeId, keyId: keyId, sourceId: typeId, revision: revision, text: storeText(""), textLength: 0usize, hasText: true, renderSlot: - 1, actionSlot: - 1, children: nullRaw(), childCount: count, firstChild: first, secondChild: second, childMode: 1i32, nativeHandle: nullRaw(), hasNativeHandle: false, style: nullRaw(), hasStyle: false, elementRef: nullRaw(), hasElementRef: false,
+  });
+}
+function allocateFixedRecordText(kind: i32, typeId: u64, keyId: u64, revision: u64, text: &str, first: *mut u8, second: *mut u8, count: usize): Element {
+  return allocateRecord({
+    kind: kind, typeId: typeId, keyId: keyId, sourceId: typeId, revision: revision, text: storeText(text), textLength: text.byteLength, hasText: true, renderSlot: - 1, actionSlot: - 1, children: nullRaw(), childCount: count, firstChild: first, secondChild: second, childMode: 1i32, nativeHandle: nullRaw(), hasNativeHandle: false, style: nullRaw(), hasStyle: false, elementRef: nullRaw(), hasElementRef: false,
+  });
+}
+unsafe function allocateFixedRecordBytes(kind: i32, typeId: u64, keyId: u64, revision: u64, source: *const u8, length: usize, first: *mut u8, second: *mut u8, count: usize): Element {
+  let text: *mut u8 = nullRaw();
+  unsafe {
+    text = storeBytes(source, length);
+  }
+  return allocateRecord({
+    kind: kind, typeId: typeId, keyId: keyId, sourceId: typeId, revision: revision, text: text, textLength: length, hasText: true, renderSlot: - 1, actionSlot: - 1, children: nullRaw(), childCount: count, firstChild: first, secondChild: second, childMode: 1i32, nativeHandle: nullRaw(), hasNativeHandle: false, style: nullRaw(), hasStyle: false, elementRef: nullRaw(), hasElementRef: false,
+  });
+}
+function reserveRenderSlot(): i32 {
+  unsafe {
+    if (!renderUsed0) {
+      renderUsed0 = true;
+      return 0;
+    }
+    if (!renderUsed1) {
+      renderUsed1 = true;
+      return 1;
+    }
+    if (!renderUsed2) {
+      renderUsed2 = true;
+      return 2;
+    }
+    if (!renderUsed3) {
+      renderUsed3 = true;
+      return 3;
+    }
+    if (!renderUsed4) {
+      renderUsed4 = true;
+      return 4;
+    }
+    if (!renderUsed5) {
+      renderUsed5 = true;
+      return 5;
+    }
+    if (!renderUsed6) {
+      renderUsed6 = true;
+      return 6;
+    }
+    if (!renderUsed7) {
+      renderUsed7 = true;
+      return 7;
+    }
+  }
+  return - 1;
+}
+function installRenderSlot(slot: i32, callback: () => void): void {
+  unsafe {
+    if (slot === 0) {
+      renderCallback0 = move callback;
+      return;
+    }
+    if (slot === 1) {
+      renderCallback1 = move callback;
+      return;
+    }
+    if (slot === 2) {
+      renderCallback2 = move callback;
+      return;
+    }
+    if (slot === 3) {
+      renderCallback3 = move callback;
+      return;
+    }
+    if (slot === 4) {
+      renderCallback4 = move callback;
+      return;
+    }
+    if (slot === 5) {
+      renderCallback5 = move callback;
+      return;
+    }
+    if (slot === 6) {
+      renderCallback6 = move callback;
+      return;
+    }
+    if (slot === 7) {
+      renderCallback7 = move callback;
+    }
+  }
+}
+function releaseRenderSlot(slot: i32): void {
+  unsafe {
+    if (slot === 0) {
+      renderCallback0 = undefined;
+      renderOutput0 = undefined;
+      renderUsed0 = false;
+      return;
+    }
+    if (slot === 1) {
+      renderCallback1 = undefined;
+      renderOutput1 = undefined;
+      renderUsed1 = false;
+      return;
+    }
+    if (slot === 2) {
+      renderCallback2 = undefined;
+      renderOutput2 = undefined;
+      renderUsed2 = false;
+      return;
+    }
+    if (slot === 3) {
+      renderCallback3 = undefined;
+      renderOutput3 = undefined;
+      renderUsed3 = false;
+      return;
+    }
+    if (slot === 4) {
+      renderCallback4 = undefined;
+      renderOutput4 = undefined;
+      renderUsed4 = false;
+      return;
+    }
+    if (slot === 5) {
+      renderCallback5 = undefined;
+      renderOutput5 = undefined;
+      renderUsed5 = false;
+      return;
+    }
+    if (slot === 6) {
+      renderCallback6 = undefined;
+      renderOutput6 = undefined;
+      renderUsed6 = false;
+      return;
+    }
+    if (slot === 7) {
+      renderCallback7 = undefined;
+      renderOutput7 = undefined;
+      renderUsed7 = false;
+    }
+  }
+}
+function writeRenderOutput(slot: i32, value: *mut u8): void {
+  unsafe {
+    if (slot === 0) {
+      renderOutput0 = value;
+      return;
+    }
+    if (slot === 1) {
+      renderOutput1 = value;
+      return;
+    }
+    if (slot === 2) {
+      renderOutput2 = value;
+      return;
+    }
+    if (slot === 3) {
+      renderOutput3 = value;
+      return;
+    }
+    if (slot === 4) {
+      renderOutput4 = value;
+      return;
+    }
+    if (slot === 5) {
+      renderOutput5 = value;
+      return;
+    }
+    if (slot === 6) {
+      renderOutput6 = value;
+      return;
+    }
+    if (slot === 7) {
+      renderOutput7 = value;
+    }
+  }
+}
+function hasRenderOutput(slot: i32): bool {
+  unsafe {
+    if (slot === 0) {
+      return renderOutput0 !== undefined;
+    }
+    if (slot === 1) {
+      return renderOutput1 !== undefined;
+    }
+    if (slot === 2) {
+      return renderOutput2 !== undefined;
+    }
+    if (slot === 3) {
+      return renderOutput3 !== undefined;
+    }
+    if (slot === 4) {
+      return renderOutput4 !== undefined;
+    }
+    if (slot === 5) {
+      return renderOutput5 !== undefined;
+    }
+    if (slot === 6) {
+      return renderOutput6 !== undefined;
+    }
+    if (slot === 7) {
+      return renderOutput7 !== undefined;
+    }
+  }
+  return false;
+}
+function takeRenderOutput(slot: i32): *mut u8 {
+  unsafe {
+    if (slot === 0) {
+      const value = renderOutput0!;
+      renderOutput0 = undefined;
+      return value;
+    }
+    if (slot === 1) {
+      const value = renderOutput1!;
+      renderOutput1 = undefined;
+      return value;
+    }
+    if (slot === 2) {
+      const value = renderOutput2!;
+      renderOutput2 = undefined;
+      return value;
+    }
+    if (slot === 3) {
+      const value = renderOutput3!;
+      renderOutput3 = undefined;
+      return value;
+    }
+    if (slot === 4) {
+      const value = renderOutput4!;
+      renderOutput4 = undefined;
+      return value;
+    }
+    if (slot === 5) {
+      const value = renderOutput5!;
+      renderOutput5 = undefined;
+      return value;
+    }
+    if (slot === 6) {
+      const value = renderOutput6!;
+      renderOutput6 = undefined;
+      return value;
+    }
+    if (slot === 7) {
+      const value = renderOutput7!;
+      renderOutput7 = undefined;
+      return value;
+    }
+  }
+  return nullRaw();
+}
+function invokeRenderSlot(slot: i32): void {
+  unsafe {
+    if (slot === 0) {
+      renderCallback0!();
+      return;
+    }
+    if (slot === 1) {
+      renderCallback1!();
+      return;
+    }
+    if (slot === 2) {
+      renderCallback2!();
+      return;
+    }
+    if (slot === 3) {
+      renderCallback3!();
+      return;
+    }
+    if (slot === 4) {
+      renderCallback4!();
+      return;
+    }
+    if (slot === 5) {
+      renderCallback5!();
+      return;
+    }
+    if (slot === 6) {
+      renderCallback6!();
+      return;
+    }
+    if (slot === 7) {
+      renderCallback7!();
+    }
+  }
+}
+function reserveActionSlot(): i32 {
+  unsafe {
+    if (!actionUsed0) {
+      actionUsed0 = true;
+      return 0;
+    }
+    if (!actionUsed1) {
+      actionUsed1 = true;
+      return 1;
+    }
+    if (!actionUsed2) {
+      actionUsed2 = true;
+      return 2;
+    }
+    if (!actionUsed3) {
+      actionUsed3 = true;
+      return 3;
+    }
+    if (!actionUsed4) {
+      actionUsed4 = true;
+      return 4;
+    }
+    if (!actionUsed5) {
+      actionUsed5 = true;
+      return 5;
+    }
+    if (!actionUsed6) {
+      actionUsed6 = true;
+      return 6;
+    }
+    if (!actionUsed7) {
+      actionUsed7 = true;
+      return 7;
+    }
+  }
+  return - 1;
+}
+function installActionSlot(slot: i32, callback: () => void): void {
+  unsafe {
+    if (slot === 0) {
+      actionCallback0 = move callback;
+      return;
+    }
+    if (slot === 1) {
+      actionCallback1 = move callback;
+      return;
+    }
+    if (slot === 2) {
+      actionCallback2 = move callback;
+      return;
+    }
+    if (slot === 3) {
+      actionCallback3 = move callback;
+      return;
+    }
+    if (slot === 4) {
+      actionCallback4 = move callback;
+      return;
+    }
+    if (slot === 5) {
+      actionCallback5 = move callback;
+      return;
+    }
+    if (slot === 6) {
+      actionCallback6 = move callback;
+      return;
+    }
+    if (slot === 7) {
+      actionCallback7 = move callback;
+    }
+  }
+}
+function releaseActionSlot(slot: i32): void {
+  unsafe {
+    if (slot === 0) {
+      actionCallback0 = undefined;
+      actionUsed0 = false;
+      return;
+    }
+    if (slot === 1) {
+      actionCallback1 = undefined;
+      actionUsed1 = false;
+      return;
+    }
+    if (slot === 2) {
+      actionCallback2 = undefined;
+      actionUsed2 = false;
+      return;
+    }
+    if (slot === 3) {
+      actionCallback3 = undefined;
+      actionUsed3 = false;
+      return;
+    }
+    if (slot === 4) {
+      actionCallback4 = undefined;
+      actionUsed4 = false;
+      return;
+    }
+    if (slot === 5) {
+      actionCallback5 = undefined;
+      actionUsed5 = false;
+      return;
+    }
+    if (slot === 6) {
+      actionCallback6 = undefined;
+      actionUsed6 = false;
+      return;
+    }
+    if (slot === 7) {
+      actionCallback7 = undefined;
+      actionUsed7 = false;
+    }
+  }
+}
+function invokeActionSlot(slot: i32): void {
+  unsafe {
+    if (slot === 0) {
+      actionCallback0!();
+      return;
+    }
+    if (slot === 1) {
+      actionCallback1!();
+      return;
+    }
+    if (slot === 2) {
+      actionCallback2!();
+      return;
+    }
+    if (slot === 3) {
+      actionCallback3!();
+      return;
+    }
+    if (slot === 4) {
+      actionCallback4!();
+      return;
+    }
+    if (slot === 5) {
+      actionCallback5!();
+      return;
+    }
+    if (slot === 6) {
+      actionCallback6!();
+      return;
+    }
+    if (slot === 7) {
+      actionCallback7!();
+    }
+  }
+}
+function rawPointer(element: Element): *mut u8 {
+  unsafe {
+    return element.rawForRuntime();
+  }
+}
+function renderElement(element: Element): Element {
+  let pointer: *mut u8 = nullRaw();
+  let kind: i32 = 0;
+  let slot: i32 = - 1i32;
+  let source: u64 = 0;
+  let key: u64 = 0;
+  unsafe {
+    pointer = element.rawForRuntime();
+    const stored = & *(pointer as *const ElementRecord);
+    kind = stored.kind;
+    slot = stored.renderSlot;
+    source = stored.sourceId;
+    key = stored.keyId;
+  }
+  if (kind !== 1i32) {
+    return move element;
+  }
+  if (slot<0) {
+    releaseRawRecord(pointer);
+    return leaf();
+  }
+  beginComponent(source, key);
+  invokeRenderSlot(slot);
+  endComponent();
+  const valid = hasRenderOutput(slot);
+  let output: *mut u8 = nullRaw();
+  if (valid) {
+    output = takeRenderOutput(slot);
+  }
+  if (valid) {
+    releaseRenderSlot(slot);
+    releaseRawRecord(pointer);
+    unsafe {
+      return Element.fromRaw(output);
+    }
+  }
+  releaseRenderSlot(slot);
+  releaseRawRecord(pointer);
+  unsafe {
+    if (output !== nullRaw()) {
+      rawFree(output);
+    }
+  }
+  return leaf();
+}
+function takeChildPointerAtPointer(pointer: *mut u8): *mut u8 {
+  if (childCountAtPointer(pointer) === 0usize) {
+    return nullRaw();
+  }
+  let childPointer: *mut u8 = nullRaw();
+  let nextPointer: *mut u8 = nullRaw();
+  let linkPointer: *mut u8 = nullRaw();
+  let count: usize = 0;
+  let mode: i32 = 0;
+  unsafe {
+    count =( & *(pointer as *const ElementRecord)).childCount;
+    mode =( & *(pointer as *const ElementRecord)).childMode;
+    if (mode === 1i32) {
+      childPointer =( & *(pointer as *const ElementRecord)).firstChild;
+      if (count === 2usize) {
+        nextPointer =( & *(pointer as *const ElementRecord)).secondChild;
+      }
+    } else {
+      linkPointer =( & *(pointer as *const ElementRecord)).children;
+      childPointer =( & *(linkPointer as *const ChildLink)).value;
+      nextPointer =( & *(linkPointer as *const ChildLink)).next;
+    }
+  }
+  if (mode === 1i32) {
+    unsafe {
+      const emptyPointer = nullRaw();
+      if (count === 2usize) {
+        writePointerAt(pointer, 88usize, nextPointer);
+        writePointerAt(pointer, 96usize, emptyPointer);
+      } else {
+        writePointerAt(pointer, 88usize, emptyPointer);
+      }
+      writeUsizeAt(pointer, 80usize, count - 1usize);
+    }
+    return childPointer;
+  }
+  unsafe {
+    writePointerAt(pointer, 72usize, nextPointer);
+    writeUsizeAt(pointer, 80usize, count - 1usize);
+    rawFree(linkPointer);
+  }
+  return childPointer;
+}
+function takeChildAtPointer(pointer: *mut u8): Element | undefined {
+  const childPointer = takeChildPointerAtPointer(pointer);
+  if (childPointer === nullRaw()) {
+    return undefined;
+  }
+  unsafe {
+    return Element.fromRaw(childPointer);
+  }
+}
+function childCountAtPointer(pointer: *mut u8): usize {
+  unsafe {
+    return( & *(pointer as *const ElementRecord)).childCount;
+  }
+}
+function releaseChildren(pointer: *mut u8): void {
+  if (pointer === nullRaw()) {
+    return;
+  }
+  while (childCountAtPointer(pointer) > 0usize) {
+    const childPointer = takeChildPointerAtPointer(pointer);
+    if (childPointer === nullRaw()) {
+      break;
+    }
+    disposePointer(childPointer);
+  }
+  unsafe {
+    const stored = &mut *(pointer as *mut ElementRecord);
+    writePointerAt(pointer, 72usize, nullRaw());
+    writeUsizeAt(pointer, 80usize, 0usize);
+    writePointerAt(pointer, 88usize, nullRaw());
+    writePointerAt(pointer, 96usize, nullRaw());
+    stored.childMode = 0i32;
+  }
+}
+function releaseRawRecord(pointer: *mut u8): void {
+  if (pointer === nullRaw()) {
+    return;
+  }
+  let text: *mut u8 = nullRaw();
+  let hasText = false;
+  unsafe {
+    const stored = & *(pointer as *const ElementRecord);
+    text = stored.text;
+    hasText = stored.hasText;
+  }
+  let style: *mut u8 = nullRaw();
+  let hasStyle = false;
+  unsafe {
+    const stored = & *(pointer as *const ElementRecord);
+    style = stored.style;
+    hasStyle = stored.hasStyle;
+  }
+  releaseChildren(pointer);
+  unsafe {
+    if (hasText) {
+      rawFree(text);
+    }
+    if (hasStyle && style !== nullRaw()) {
+      rawFree(style);
+    }
+    rawFree(pointer);
+  }
+}
+unsafe function clearElementRefPointer(pointer: *mut u8): void {
+  if (pointer === nullRaw()) {
+    return;
+  }
+  let empty = nullRaw();
+  unsafe {
+    tn_bytes_copy_to_at(( &empty)as *const u8, 8, 0, 8, pointer, 16, 8);
+  }
+}
+function disposePointer(pointer: *mut u8): void {
+  if (pointer === nullRaw()) {
+    return;
+  }
+  unsafe {
+    if (focusedElement === pointer) {
+      focusedElement = nullRaw();
+    }
+  }
+  let renderSlot: i32 = - 1i32;
+  let actionSlot: i32 = - 1i32;
+  let refPointer: *mut u8 = nullRaw();
+  let hasRef = false;
+  unsafe {
+    const stored = & *(pointer as *const ElementRecord);
+    renderSlot = stored.renderSlot;
+    actionSlot = stored.actionSlot;
+    refPointer = stored.elementRef;
+    hasRef = stored.hasElementRef;
+  }
+  if (hasRef && refPointer !== nullRaw()) {
+    unsafe {
+      clearElementRefPointer(refPointer);
+    }
+  }
+  if (renderSlot >= 0) {
+    releaseRenderSlot(renderSlot);
+  }
+  if (actionSlot >= 0) {
+    releaseActionSlot(actionSlot);
+  }
+  releaseRawRecord(pointer);
+}
+export unsafe function disposeRaw(pointer: *mut u8): void {
+  disposePointer(pointer);
+}
+function disposeElement(element: Element): void {
+  unsafe {
+    disposePointer(element.rawForRuntime());
+  }
+}
+export function dispatchPress(element: Element): void {
+  if (element.isEmpty()) {
+    return;
+  }
+  let slot: i32 = - 1i32;
+  unsafe {
+    slot =( & *(element.rawForRuntime()as *const ElementRecord)).actionSlot;
+  }
+  if (slot >= 0) {
+    invokeActionSlot(slot);
+  }
+}
+export function dispatchActionSlot(slot: i32): void {
+  if (slot >= 0) {
+    invokeActionSlot(slot);
+  }
+}
+export function focusElement(element: Element): void {
+  if (element.isEmpty()) {
+    return;
+  }
+  unsafe {
+    focusedElement = element.rawForRuntime();
+  }
+}
+export function clearFocus(): void {
+  unsafe {
+    focusedElement = nullRaw();
+  }
+}
+export function isFocused(element: Element): bool {
+  if (element.isEmpty()) {
+    return false;
+  }
+  unsafe {
+    return focusedElement === element.rawForRuntime();
+  }
+}
+export function leaf(): Element {
+  return makeRecord(0i32, 0u64, 0u64, 0u64, "", - 1, - 1, emptyChildren());
+}
+export function createHost(kind: i32, typeId: u64, keyId: u64, text: &str, children: Array<Element >): Element {
+  return makeRecord(kind, typeId, keyId, 0u64, text, - 1, - 1, move children);
+}
+export function createHostStyled(kind: i32, typeId: u64, revision: u64, text: &str, children: Array<Element >): Element {
+  return makeRecord(kind, typeId, 0u64, revision, text, - 1, - 1, move children);
+}
+export function createHostStyledWithStyle(kind: i32, typeId: u64, revision: u64, text: &str, children: Array<Element>, style: StyleSnapshot): Element {
+  return makeRecordStyled(kind, typeId, 0u64, revision, text, - 1, - 1, move children, move style);
+}
+export function createHostAction(kind: i32, typeId: u64, keyId: u64, text: &str, children: Array<Element>, action: () => void): Element {
+  const slot = reserveActionSlot();
+  if (slot<0) {
+    return createHost(kind, typeId, keyId, text, move children);
+  }
+  installActionSlot(slot, move action);
+  return makeRecord(kind, typeId, keyId, 0u64, text, - 1, slot, move children);
+}
+export unsafe function createHostActionBytes(kind: i32, typeId: u64, keyId: u64, source: *const u8, length: usize, children: Array<Element>, action: () => void): Element {
+  const slot = reserveActionSlot();
+  const count = children.length;
+  const childHead = storeChildren(move children);
+  let text: *mut u8 = nullRaw();
+  unsafe {
+    text = storeBytes(source, length);
+  }
+  if (slot<0) {
+    return allocateRecord({
+      kind: kind, typeId: typeId, keyId: keyId, sourceId: typeId, revision: 0u64, text: text, textLength: length, hasText: true, renderSlot: - 1, actionSlot: - 1, children: childHead, childCount: count, firstChild: nullRaw(), secondChild: nullRaw(), childMode: 0i32, nativeHandle: nullRaw(), hasNativeHandle: false, style: nullRaw(), hasStyle: false, elementRef: nullRaw(), hasElementRef: false,
+    });
+  }
+  installActionSlot(slot, move action);
+  return allocateRecord({
+    kind: kind, typeId: typeId, keyId: keyId, sourceId: typeId, revision: 0u64, text: text, textLength: length, hasText: true, renderSlot: - 1, actionSlot: slot, children: childHead, childCount: count, firstChild: nullRaw(), secondChild: nullRaw(), childMode: 0i32, nativeHandle: nullRaw(), hasNativeHandle: false, style: nullRaw(), hasStyle: false, elementRef: nullRaw(), hasElementRef: false,
+  });
+}
+export function createHostActionStyled(kind: i32, typeId: u64, revision: u64, text: &str, children: Array<Element>, action: () => void): Element {
+  const slot = reserveActionSlot();
+  if (slot<0) {
+    return createHostStyled(kind, typeId, revision, text, move children);
+  }
+  installActionSlot(slot, move action);
+  return makeRecord(kind, typeId, 0u64, revision, text, - 1, slot, move children);
+}
+export function createHostActionStyledWithStyle(kind: i32, typeId: u64, revision: u64, text: &str, children: Array<Element>, action: () => void, style: StyleSnapshot): Element {
+  const slot = reserveActionSlot();
+  if (slot<0) {
+    return createHostStyledWithStyle(kind, typeId, revision, text, move children, move style);
+  }
+  installActionSlot(slot, move action);
+  return makeRecordStyled(kind, typeId, 0u64, revision, text, - 1, slot, move children, move style);
+}
+export function createHostSingle(kind: i32, typeId: u64, keyId: u64, child: Element): Element {
+  let childPointer: *mut u8 = nullRaw();
+  unsafe {
+    childPointer = child.rawForRuntime();
+  }
+  return allocateFixedRecord(kind, typeId, keyId, 0u64, childPointer, nullRaw(), 1usize);
+}
+export function createHostSingleStyled(kind: i32, typeId: u64, revision: u64, child: Element): Element {
+  let childPointer: *mut u8 = nullRaw();
+  unsafe {
+    childPointer = child.rawForRuntime();
+  }
+  return allocateFixedRecord(kind, typeId, 0u64, revision, childPointer, nullRaw(), 1usize);
+}
+export function createHostSingleText(kind: i32, typeId: u64, keyId: u64, text: &str, child: Element): Element {
+  let childPointer: *mut u8 = nullRaw();
+  unsafe {
+    childPointer = child.rawForRuntime();
+  }
+  return allocateFixedRecordText(kind, typeId, keyId, 0u64, text, childPointer, nullRaw(), 1usize);
+}
+export function createHostPair(kind: i32, typeId: u64, keyId: u64, first: Element, second: Element): Element {
+  let firstPointer: *mut u8 = nullRaw();
+  let secondPointer: *mut u8 = nullRaw();
+  unsafe {
+    firstPointer = first.rawForRuntime();
+    secondPointer = second.rawForRuntime();
+  }
+  return allocateFixedRecord(kind, typeId, keyId, 0u64, firstPointer, secondPointer, 2usize);
+}
+export function createHostPairStyled(kind: i32, typeId: u64, revision: u64, first: Element, second: Element): Element {
+  let firstPointer: *mut u8 = nullRaw();
+  let secondPointer: *mut u8 = nullRaw();
+  unsafe {
+    firstPointer = first.rawForRuntime();
+    secondPointer = second.rawForRuntime();
+  }
+  return allocateFixedRecord(kind, typeId, 0u64, revision, firstPointer, secondPointer, 2usize);
+}
+export function createText(text: &str): Element {
+  return createHost(3i32, 1002u64, 0u64, text, emptyChildren());
+}
+export function createKeyedText(key: &str, text: &str): Element {
+  return makeRecord(kindText(), textTypeId(), keyTextIdentity(key), 0u64, text, - 1, - 1, emptyChildren());
+}
+export unsafe function createTextBytes(source: *const u8, length: usize): Element {
+  let bytes: *mut u8 = nullRaw();
+  unsafe {
+    bytes = rawAlloc(length + 1usize);
+    if (length > 0usize) {
+      tn_bytes_copy_to_at(source, length as c_size, 0, length as c_size, bytes,(length + 1usize)as c_size, 0);
+    }
+    tn_bytes_write_u8(bytes,(length + 1usize)as c_size, length as c_size, 0u8);
+  }
+  return allocateRecord({
+    kind: kindText(), typeId: textTypeId(), keyId: 0u64, sourceId: textTypeId(), revision: 0u64, text: bytes, textLength: length, hasText: true, renderSlot: - 1, actionSlot: - 1, children: nullRaw(), childCount: 0usize, firstChild: nullRaw(), secondChild: nullRaw(), childMode: 0i32, nativeHandle: nullRaw(), hasNativeHandle: false, style: nullRaw(), hasStyle: false, elementRef: nullRaw(), hasElementRef: false,
+  });
+}
+export function createTextOwned(text: &string): Element {
+  let source: *const u8 = nullConst();
+  let length: usize = 0;
+  unsafe {
+    source = text as *const u8;
+    length = tn_string_length(source);
+  }
+  unsafe {
+    return createTextBytes(source, length);
+  }
+}
+export function hostChildCount(element: Element): usize {
+  if (element.isEmpty()) {
+    return 0;
+  }
+  unsafe {
+    return( & *(element.rawForRuntime()as *const ElementRecord)).childCount;
+  }
+}
+export function hostChildAt(element: Element, index: usize): Element | undefined {
+  if (element.isEmpty()) {
+    return undefined;
+  }
+  if (index >= hostChildCount(element)) {
+    return undefined;
+  }
+  let linkPointer: *mut u8 = rawPointer(element);
+  let childPointer: *mut u8 = rawPointer(element);
+  let mode: i32 = 0;
+  let position: usize = 0;
+  unsafe {
+    mode =( & *(element.rawForRuntime()as *const ElementRecord)).childMode;
+    if (mode === 1i32) {
+      if (index === 0usize) {
+        childPointer =( & *(element.rawForRuntime()as *const ElementRecord)).firstChild;
+      } else {
+        childPointer =( & *(element.rawForRuntime()as *const ElementRecord)).secondChild;
+      }
+    } else {
+      linkPointer =( & *(element.rawForRuntime()as *const ElementRecord)).children;
+      while (position<index) {
+        linkPointer =( & *(linkPointer as *const ChildLink)).next;
+        position = position + 1usize;
+      }
+      childPointer =( & *(linkPointer as *const ChildLink)).value;
+    }
+  }
+  if (childPointer === nullRaw()) {
+    return undefined;
+  }
+  unsafe {
+    return Element.fromRaw(childPointer);
+  }
+}
+export function hostSetChild(element: Element, index: usize, child: Element): bool {
+  if (element.isEmpty() || child.isEmpty()) {
+    return false;
+  }
+  if (index >= hostChildCount(element)) {
+    return false;
+  }
+  let linkPointer: *mut u8 = rawPointer(element);
+  let mode: i32 = 0;
+  let position: usize = 0;
+  unsafe {
+    mode =( & *(element.rawForRuntime()as *const ElementRecord)).childMode;
+    if (mode === 1i32) {
+      if (index === 0usize) {
+        writePointerAt(element.rawForRuntime(), 88usize, child.rawForRuntime());
+      } else {
+        writePointerAt(element.rawForRuntime(), 96usize, child.rawForRuntime());
+      }
+      return true;
+    }
+    linkPointer =( & *(element.rawForRuntime()as *const ElementRecord)).children;
+    while (position<index) {
+      linkPointer =( & *(linkPointer as *const ChildLink)).next;
+      position = position + 1usize;
+    }
+    writePointerAt(linkPointer, 0usize, child.rawForRuntime());
+  }
+  return true;
+}
+export function hostTakeChild(element: Element): Element | undefined {
+  if (element.isEmpty()) {
+    return undefined;
+  }
+  return takeChildAtPointer(rawPointer(element));
+}
+export function jsx<Props>(component: (Props) => Element, properties: Props, key: string | undefined): Element {
+  const slot = reserveRenderSlot();
+  if (slot<0) {
+    return leaf();
+  }
+  unsafe {
+    const identity = keyIdentity(key);
+    let holder: ComponentHolder<Props > = {
+      value: move component,
+    };
+    let typeId: u64 = 0;
+    tn_bytes_copy_at(( &holder.value)as *const u8, 8, 0, 8,( &mut typeId)as *mut u8);
+    if (typeId === 0u64) {
+      typeId = 1u64;
+    }
+    let source = sourceForSlot(slot, typeId);
+    if (identity !== 0u64) {
+      source = typeId;
+    }
+    const callback: () => void = move(): void => {
+      const rendered = holder.value(move properties);
+      writeRenderOutput(slot, rendered.rawForRuntime());
+    };
+    installRenderSlot(slot, move callback);
+    const element = makeRecord(1i32, typeId, identity, 0u64, "", slot, - 1, emptyChildren());
+    writeU64At(element.rawForRuntime(), 24usize, source);
+    return move element;
+  }
+}
+export function jsxs<Props>(component: (Props) => Element, properties: Props, key: string | undefined): Element {
+  return jsx<Props>(component, move properties, move key);
+}
+export function fragment<Children>(children: Children): Element {
+  const bytes = sizeOf<Children>();
+  const childSize = sizeOf< *mut u8>();
+  const count = bytes / childSize;
+  const values = new Array<Element>({
+    capacity: count
+  });
+  let index: usize = 0;
+  while (index<count) {
+    let pointer: *mut u8 = nullRaw();
+    unsafe {
+      pointer = rawChildAt(( &children)as *const u8, bytes, index * childSize);
+    }
+    if (pointer !== nullRaw()) {
+      unsafe {
+        values.push(Element.fromRaw(pointer));
+      }
+    }
+    index = index + 1usize;
+  }
+  return fragmentElements(move values);
+}
+export function fragmentElements(children: Array<ElementChild >): Element {
+  return makeRecord(kindFragment(), fragmentTypeId(), 0u64, 0u64, "", - 1, - 1, move children);
+}

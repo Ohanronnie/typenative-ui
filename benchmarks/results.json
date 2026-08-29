@@ -1,0 +1,18 @@
+{
+  "compilerCommit": "3ef10d4579e1c0765ad56fe787db37b9bdcb4c1a",
+  "fixture": "benchmarks/reconciler-10k.tn",
+  "profile": "optimized",
+  "sanitizer": "address",
+  "platform": "macOS arm64",
+  "allocationCount": 350128,
+  "wallSeconds": 4.11,
+  "maximumResidentBytes": 42418176,
+  "nodeCount": 10001,
+  "mutationGates": {
+    "mount": 10001,
+    "unchanged": 0,
+    "reverse": 10000,
+    "singleTextUpdate": 1,
+    "repeatChanged": 0
+  }
+}

@@ -1,0 +1,123 @@
+import { Array } from "std/collections";
+import { clearHooks, Cleanup, useEffect, useState } from "../src/hooks/hooks";
+import { createHostSingle, createText, fragmentElements, hostChildAt, jsx, kindText, kindView, viewTypeId, Element } from "../src/jsx-runtime";
+import { mutationInsert, mutationRemove } from "../src/reconciler/mutations";
+import { HeadlessRenderer } from "../src/renderer/headless";
+
+static mut mounted: i32 = 0;
+static mut cleaned: i32 = 0;
+function cleanup(): void {
+  unsafe {
+    cleaned = cleaned + 1i32;
+  }
+}
+function effect(): Cleanup {
+  unsafe {
+    mounted = mounted + 1i32;
+  }
+  return cleanup;
+}
+struct StructMarker {
+}
+function Probe(props: StructMarker): Element {
+  const state = useState<i32>(4i32);
+  useEffect(effect, 1u64);
+  if (state.current() !== 4i32) {
+    return createText("bad");
+  }
+  return createText("ok");
+}
+function probeElement(): Element {
+  const key: string | undefined = undefined;
+  return jsx<StructMarker>(Probe, {
+  }, move key);
+}
+function unkeyedTree(count: i32): Element {
+  const children = new Array<Element>({
+    capacity: 3usize,
+  });
+  children.push(createText("a"));
+  children.push(createText("b"));
+  if (count === 3i32) {
+    children.push(createText("c"));
+  }
+  return fragmentElements(move children);
+}
+function deepTree(depth: usize): Element {
+  let current = createText("leaf");
+  let index: usize = 0;
+  while (index<depth) {
+    current = createHostSingle(kindView(), viewTypeId(), 0u64, move current);
+    index = index + 1usize;
+  }
+  return move current;
+}
+function main(): i32 {
+  clearHooks();
+  {
+    using renderer = new HeadlessRenderer();
+    renderer.mount(probeElement());
+    unsafe {
+      if (mounted !== 1i32) {
+        renderer.unmount();
+        return 10;
+      }
+    }
+    renderer.unmount();
+    unsafe {
+      if (cleaned !== 1i32) {
+        return 11;
+      }
+    }
+    let cycle: i32 = 0;
+    while (cycle<16i32) {
+      renderer.mount(probeElement());
+      renderer.unmount();
+      cycle = cycle + 1i32;
+    }
+    unsafe {
+      if (mounted !== 17i32 || cleaned !== 17i32) {
+        return 12;
+      }
+    }
+    renderer.mount(unkeyedTree(2i32));
+    renderer.update(unkeyedTree(3i32));
+    if (renderer.mutationCount() !== 1usize || renderer.lastMutationKind() !== mutationInsert()) {
+      renderer.unmount();
+      return 13;
+    }
+    renderer.update(unkeyedTree(2i32));
+    if (renderer.mutationCount() !== 1usize || renderer.lastMutationKind() !== mutationRemove()) {
+      renderer.unmount();
+      return 14;
+    }
+    renderer.unmount();
+  }
+  clearHooks();
+  {
+    using renderer = new HeadlessRenderer();
+    renderer.mount(deepTree(64usize));
+    if (renderer.nodeCount() !== 65usize) {
+      renderer.unmount();
+      return 15;
+    }
+    const root = renderer.rootElement();
+    let cursor = root;
+    let depth: usize = 0;
+    while (hostChildAt(cursor, 0usize) !== undefined) {
+      const child = hostChildAt(cursor, 0usize);
+      if (child === undefined) {
+        break;
+      }
+      cursor = child!;
+      depth = depth + 1usize;
+    }
+    if (depth !== 64usize || cursor.kind() !== kindText() || cursor.textLength() !== 4usize) {
+      renderer.unmount();
+      return 16;
+    }
+    renderer.unmount();
+  }
+  clearHooks();
+  return 0;
+}

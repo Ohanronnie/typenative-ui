@@ -1,0 +1,293 @@
+import { nullPointer } from "std/alloc";
+import { Array } from "std/collections";
+import { Disposable } from "std/core";
+import { c_size } from "std/ffi";
+import { Style } from "../core/types";
+
+declare extern "C" {
+  function YGNodeNew(): *mut u8;
+  function YGNodeFree(node: *mut u8): void;
+  function YGNodeCalculateLayout(node: *mut u8, width: f32, height: f32, direction: i32): void;
+  function YGNodeInsertChild(node: *mut u8, child: *mut u8, index: c_size): void;
+  function YGNodeGetChild(node: *mut u8, index: c_size): *mut u8;
+  function YGNodeStyleSetDirection(node: *mut u8, direction: i32): void;
+  function YGNodeStyleSetFlexDirection(node: *mut u8, direction: i32): void;
+  function YGNodeStyleSetJustifyContent(node: *mut u8, value: i32): void;
+  function YGNodeStyleSetAlignItems(node: *mut u8, value: i32): void;
+  function YGNodeStyleSetAlignSelf(node: *mut u8, value: i32): void;
+  function YGNodeStyleSetPositionType(node: *mut u8, value: i32): void;
+  function YGNodeStyleSetOverflow(node: *mut u8, value: i32): void;
+  function YGNodeStyleSetDisplay(node: *mut u8, value: i32): void;
+  function YGNodeStyleSetFlex(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetFlexGrow(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetFlexShrink(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetFlexBasis(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetFlexBasisAuto(node: *mut u8): void;
+  function YGNodeStyleSetPosition(node: *mut u8, edge: i32, value: f32): void;
+  function YGNodeStyleSetPositionAuto(node: *mut u8, edge: i32): void;
+  function YGNodeStyleSetMargin(node: *mut u8, edge: i32, value: f32): void;
+  function YGNodeStyleSetPadding(node: *mut u8, edge: i32, value: f32): void;
+  function YGNodeStyleSetGap(node: *mut u8, gutter: i32, value: f32): void;
+  function YGNodeStyleSetWidth(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetWidthAuto(node: *mut u8): void;
+  function YGNodeStyleSetHeight(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetHeightAuto(node: *mut u8): void;
+  function YGNodeStyleSetMinWidth(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetMinHeight(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetMaxWidth(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetMaxHeight(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetAspectRatio(node: *mut u8, value: f32): void;
+  function YGNodeLayoutGetLeft(node: *mut u8): f32;
+  function YGNodeLayoutGetTop(node: *mut u8): f32;
+  function YGNodeLayoutGetWidth(node: *mut u8): f32;
+  function YGNodeLayoutGetHeight(node: *mut u8): f32;
+}
+function nullRaw(): *mut u8 {
+  unsafe {
+    return nullPointer<u8>();
+  }
+}
+function setDimension(node: *mut u8, value: f32, width: bool): void {
+  unsafe {
+    if (width) {
+      if (value > 0.0f32) {
+        YGNodeStyleSetWidth(node, value);
+      } else {
+        YGNodeStyleSetWidthAuto(node);
+      }
+      return;
+    }
+    if (value > 0.0f32) {
+      YGNodeStyleSetHeight(node, value);
+    } else {
+      YGNodeStyleSetHeightAuto(node);
+    }
+  }
+}
+function setEdge(node: *mut u8, edge: i32, value: f32, padding: bool): void {
+  unsafe {
+    if (padding) {
+      YGNodeStyleSetPadding(node, edge, value);
+    } else {
+      YGNodeStyleSetMargin(node, edge, value);
+    }
+  }
+}
+unsafe function applyStyle(node: *mut u8, style: &Style): void {
+  unsafe {
+    YGNodeStyleSetDirection(node, 1i32);
+    YGNodeStyleSetFlexDirection(node, style.flexDirection === 0i32?2i32: 0i32);
+    YGNodeStyleSetJustifyContent(node, style.justifyContent);
+    YGNodeStyleSetAlignItems(node, style.alignItems);
+    YGNodeStyleSetAlignSelf(node, style.alignSelf);
+    YGNodeStyleSetPositionType(node, style.positionType === 1i32?2i32: 1i32);
+    YGNodeStyleSetOverflow(node, style.overflow);
+    YGNodeStyleSetDisplay(node, style.display);
+    setDimension(node, style.width, true);
+    setDimension(node, style.height, false);
+    YGNodeStyleSetMinWidth(node, style.minWidth);
+    YGNodeStyleSetMinHeight(node, style.minHeight);
+    if (style.maxWidth > 0.0f32) {
+      YGNodeStyleSetMaxWidth(node, style.maxWidth);
+    }
+    if (style.maxHeight > 0.0f32) {
+      YGNodeStyleSetMaxHeight(node, style.maxHeight);
+    }
+    if (style.flex !== 0.0f32) {
+      YGNodeStyleSetFlex(node, style.flex);
+    }
+    if (style.flexGrow !== 0.0f32) {
+      YGNodeStyleSetFlexGrow(node, style.flexGrow);
+    }
+    YGNodeStyleSetFlexShrink(node, style.flexShrink);
+    if (style.flexBasis !== 0.0f32) {
+      YGNodeStyleSetFlexBasis(node, style.flexBasis);
+    } else {
+      YGNodeStyleSetFlexBasisAuto(node);
+    }
+    if (style.hasMarginEdges) {
+      setEdge(node, 0i32, style.marginTop, false);
+      setEdge(node, 1i32, style.marginRight, false);
+      setEdge(node, 2i32, style.marginBottom, false);
+      setEdge(node, 3i32, style.marginLeft, false);
+    } else {
+      setEdge(node, 8i32, style.margin, false);
+    }
+    if (style.hasPaddingEdges) {
+      setEdge(node, 0i32, style.paddingTop, true);
+      setEdge(node, 1i32, style.paddingRight, true);
+      setEdge(node, 2i32, style.paddingBottom, true);
+      setEdge(node, 3i32, style.paddingLeft, true);
+    } else {
+      setEdge(node, 8i32, style.padding, true);
+    }
+    YGNodeStyleSetGap(node, 2i32, style.gap);
+    if (style.insetTop !== 0.0f32) {
+      YGNodeStyleSetPosition(node, 1i32, style.insetTop);
+    } else {
+      YGNodeStyleSetPositionAuto(node, 1i32);
+    }
+    if (style.insetRight !== 0.0f32) {
+      YGNodeStyleSetPosition(node, 2i32, style.insetRight);
+    } else {
+      YGNodeStyleSetPositionAuto(node, 2i32);
+    }
+    if (style.insetBottom !== 0.0f32) {
+      YGNodeStyleSetPosition(node, 3i32, style.insetBottom);
+    } else {
+      YGNodeStyleSetPositionAuto(node, 3i32);
+    }
+    if (style.insetLeft !== 0.0f32) {
+      YGNodeStyleSetPosition(node, 0i32, style.insetLeft);
+    } else {
+      YGNodeStyleSetPositionAuto(node, 0i32);
+    }
+    if (style.aspectRatio > 0.0f32) {
+      YGNodeStyleSetAspectRatio(node, style.aspectRatio);
+    }
+  }
+}
+export class LayoutNode implements Disposable {
+  private yoga: *mut u8;
+  private styleRevision: u64;
+  public disposed: bool;
+  private children: Array<LayoutNode>;
+  public x: f32;
+  public y: f32;
+  public width: f32;
+  public height: f32;
+  public constructor(style: Style) {
+    unsafe {
+      this.yoga = YGNodeNew();
+    }
+    this.styleRevision = 0u64;
+    this.disposed = false;
+    this.children = new Array<LayoutNode>({
+      capacity: 0
+    });
+    this.x = 0.0f32;
+    this.y = 0.0f32;
+    this.width = 0.0f32;
+    this.height = 0.0f32;
+    if (this.yoga !== nullRaw()) {
+      unsafe {
+        applyStyle(this.yoga, &style);
+      }
+      this.styleRevision = style.revision;
+    }
+  }
+  public updateStyle(style: &Style): void {
+    if (this.disposed || this.yoga === nullRaw() || this.styleRevision === style.revision) {
+      return;
+    }
+    unsafe {
+      applyStyle(this.yoga, style);
+    }
+    this.styleRevision = style.revision;
+  }
+  public unsafe yogaHandle(): *mut u8 {
+    return this.yoga;
+  }
+  public isDisposed(): bool {
+    return this.disposed;
+  }
+  public hasYoga(): bool {
+    return this.yoga !== nullRaw();
+  }
+  public add(child: LayoutNode): void {
+    if (this.disposed || child.isDisposed() || this.yoga === nullRaw() || !child.hasYoga()) {
+      return;
+    }
+    let childYoga: *mut u8 = nullRaw();
+    unsafe {
+      childYoga = child.yogaHandle();
+      YGNodeInsertChild(this.yoga, childYoga, this.children.length);
+    }
+    this.children.push(move child);
+  }
+  public childCount(): usize {
+    return this.children.length;
+  }
+  public childFrameAt(index: usize): LayoutFrame {
+    if (this.disposed || this.yoga === nullRaw()) {
+      return {
+        x: 0.0f32, y: 0.0f32, width: 0.0f32, height: 0.0f32
+      };
+    }
+    let childYoga: *mut u8 = nullRaw();
+    unsafe {
+      childYoga = YGNodeGetChild(this.yoga, index);
+    }
+    if (childYoga === nullRaw()) {
+      return {
+        x: 0.0f32, y: 0.0f32, width: 0.0f32, height: 0.0f32
+      };
+    }
+    unsafe {
+      return {
+        x: YGNodeLayoutGetLeft(childYoga), y: YGNodeLayoutGetTop(childYoga), width: YGNodeLayoutGetWidth(childYoga), height: YGNodeLayoutGetHeight(childYoga),
+      };
+    }
+  }
+  public frameX(): f32 {
+    return this.x;
+  }
+  public frameY(): f32 {
+    return this.y;
+  }
+  public frameWidth(): f32 {
+    return this.width;
+  }
+  public frameHeight(): f32 {
+    return this.height;
+  }
+  public calculate(width: f32, height: f32): void {
+    if (this.disposed || this.yoga === nullRaw()) {
+      return;
+    }
+    unsafe {
+      YGNodeCalculateLayout(this.yoga, width, height, 1i32);
+      this.x = YGNodeLayoutGetLeft(this.yoga);
+      this.y = YGNodeLayoutGetTop(this.yoga);
+      this.width = YGNodeLayoutGetWidth(this.yoga);
+      this.height = YGNodeLayoutGetHeight(this.yoga);
+    }
+  }
+  public close(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
+    while (this.children.length > 0usize) {
+      const child = this.children.pop();
+      if (child !== undefined) {
+        child!.close();
+      }
+    }
+    if (this.yoga !== nullRaw()) {
+      unsafe {
+        YGNodeFree(this.yoga);
+      }
+      this.yoga = nullRaw();
+    }
+  }
+  public [Symbol.dispose](): void {
+    this.close();
+  }
+}
+export struct LayoutFrame {
+  public x: f32;
+  public y: f32;
+  public width: f32;
+  public height: f32;
+}
+export class LayoutEngine {
+  public constructor() {
+  }
+  public calculate(root: &mut LayoutNode, width: f32, height: f32): void {
+    root.calculate(width, height);
+  }
+}
+export function layout(root: &mut LayoutNode, width: f32, height: f32): void {
+  root.calculate(width, height);
+}
