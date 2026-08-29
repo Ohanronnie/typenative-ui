@@ -1,0 +1,23 @@
+{
+  "entry": "main.tnx",
+  "target": "aarch64-apple-darwin",
+  "jsx": {
+    "runtime": "../../src/jsx-runtime"
+  },
+  "link": {
+    "libraries": ["yogacore"],
+    "searchPaths": [".cache/yoga/build-core"],
+    "arguments": [
+      "-framework",
+      "AppKit",
+      "-framework",
+      "Foundation",
+      "-framework",
+      "CoreGraphics",
+      "-lobjc",
+      "-lc++",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendSize",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendRect"
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+import { log } from "std/console";
+import { exit } from "std/process";
+import { Button, Element, Text, View, Window, runApp } from "../../src/index";
+
+struct DemoProps {
+}
+function sayHello(): void {
+  log("TypeNative UI: hello from the native button");
+}
+function describeRuntime(): void {
+  log("TypeNative UI: this click traveled through AppKit into TypeNative");
+}
+function quit(): void {
+  log("TypeNative UI: goodbye");
+  exit(0);
+}
+function Demo(props: DemoProps): Element {
+  return <Window title="TypeNative UI Demo">
+    <View>
+      <Text>TypeNative UI</Text>
+      <Text>A small native desktop interface written in TypeNative.</Text>
+      <Text>Click a button to send an AppKit event back to TypeNative.</Text>
+      <Button onPress={sayHello}>Say hello</Button>
+      <Button onPress={describeRuntime}>Explain the event path</Button>
+      <Button onPress={quit}>Quit</Button>
+    </View>
+  </Window>;
+}
+function main(): i32 {
+  return runApp(<Demo />);
+}
