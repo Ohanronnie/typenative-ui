@@ -31,7 +31,7 @@ jobs:
       - name: Verify compiler boundary
         run: sh scripts/verify-compiler-boundary.sh .compiler
       - name: Build pinned Yoga
-        run: scripts/check-yoga.sh
+        run: sh scripts/check-yoga.sh
       - name: Check formatting
         run: .compiler/target/release/tn fmt --check .
       - name: Check TypeNative sources
