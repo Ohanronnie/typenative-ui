@@ -1,8 +1,8 @@
 import { Array } from "std/collections";
-import { createHost, createText, fragmentElements, hostChildAt, kindText, textTypeId, Element } from "../src/jsx-runtime";
+import { String } from "std/string";
 import { mutationCreate, mutationMove, mutationUpdate } from "../src/reconciler/mutations";
-import { renderTree } from "../src/reconciler/reconciler";
 import { HeadlessRenderer } from "../src/renderer/headless";
+import { createHost, createFragmentElements, hostChildAt, keyInteger, kindText, textTypeId, Element } from "../src/tnx-runtime";
 
 function emptyChildren(): Array<Element> {
   return new Array<Element>({
@@ -10,7 +10,7 @@ function emptyChildren(): Array<Element> {
   });
 }
 function keyedText(key: u64, value: &str): Element {
-  return createHost(kindText(), textTypeId(), key, value, emptyChildren());
+  return createHost(kindText(), textTypeId(), keyInteger(key), String(value), emptyChildren());
 }
 function keyedTree(reversed: bool, changed: bool): Element {
   const children = new Array<Element>({
@@ -25,7 +25,7 @@ function keyedTree(reversed: bool, changed: bool): Element {
     children.push(keyedText(2u64, "two"));
     children.push(keyedText(3u64, "three"));
   }
-  return fragmentElements(move children);
+  return createFragmentElements(move children);
 }
 function main(): i32 {
   let result = 0i32;

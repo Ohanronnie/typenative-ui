@@ -1,0 +1,901 @@
+import { componentIdentity, nullPointer } from "std/alloc";
+import { Array } from "std/collections";
+import { Disposable } from "std/core";
+import { c_size } from "std/ffi";
+import { String } from "std/string";
+
+declare extern "C" {
+  function tn_bytes_hash(bytes: *const u8, length: c_size): u64;
+  function tn_string_equals(left: *const u8, leftLength: c_size, right: *const u8, rightLength: c_size): i32;
+  function tn_string_length(bytes: *const u8): c_size;
+}
+export enum ElementKind {
+  Empty, Component, View, Text, Button, Window, Fragment, TextInput, Image, ScrollView, List, Switch, Slider, Progress, Menu, Dialog, Toolbar, SplitView, Stack, Grid, Canvas,
+}
+export struct Key {
+  public kind: i32;
+  public text: string;
+  public integer: u64;
+  public identity: u64;
+  public equals(other: &Key): bool {
+    if (this.kind !== other.kind) {
+      return false;
+    }
+    if (this.kind === 0i32) {
+      return true;
+    }
+    if (this.kind === 1i32) {
+      unsafe {
+        return rawStringsEqual(this.text as *const u8, other.text as *const u8);
+      }
+    }
+    return this.integer === other.integer;
+  }
+}
+export struct StyleSnapshot {
+  public width: f32;
+  public height: f32;
+  public minWidth: f32;
+  public minHeight: f32;
+  public maxWidth: f32;
+  public maxHeight: f32;
+  public margin: f32;
+  public padding: f32;
+  public marginTop: f32;
+  public marginRight: f32;
+  public marginBottom: f32;
+  public marginLeft: f32;
+  public paddingTop: f32;
+  public paddingRight: f32;
+  public paddingBottom: f32;
+  public paddingLeft: f32;
+  public gap: f32;
+  public flex: f32;
+  public flexGrow: f32;
+  public flexShrink: f32;
+  public flexBasis: f32;
+  public flexDirection: i32;
+  public alignItems: i32;
+  public alignSelf: i32;
+  public justifyContent: i32;
+  public positionType: i32;
+  public insetTop: f32;
+  public insetRight: f32;
+  public insetBottom: f32;
+  public insetLeft: f32;
+  public display: i32;
+  public overflow: i32;
+  public aspectRatio: f32;
+  public hasMarginEdges: bool;
+  public hasPaddingEdges: bool;
+  public revision: u64;
+}
+export struct ComponentId {
+  private identity: u64;
+  public equals(other: &ComponentId): bool {
+    return this.identity === other.identity;
+  }
+}
+export function defaultStyleSnapshot(): StyleSnapshot {
+  return {
+    width: 0.0f32, height: 0.0f32, minWidth: 0.0f32, minHeight: 0.0f32, maxWidth: 0.0f32, maxHeight: 0.0f32, margin: 0.0f32, padding: 0.0f32, marginTop: 0.0f32, marginRight: 0.0f32, marginBottom: 0.0f32, marginLeft: 0.0f32, paddingTop: 0.0f32, paddingRight: 0.0f32, paddingBottom: 0.0f32, paddingLeft: 0.0f32, gap: 0.0f32, flex: 0.0f32, flexGrow: 0.0f32, flexShrink: 1.0f32, flexBasis: 0.0f32, flexDirection: 1i32, alignItems: 4i32, alignSelf: 0i32, justifyContent: 0i32, positionType: 0i32, insetTop: 0.0f32, insetRight: 0.0f32, insetBottom: 0.0f32, insetLeft: 0.0f32, display: 0i32, overflow: 0i32, aspectRatio: 0.0f32, hasMarginEdges: false, hasPaddingEdges: false, revision: 0u64,
+  };
+}
+function emptyKey(): Key {
+  return {
+    kind: 0i32, text: String(""), integer: 0u64, identity: 0u64,
+  };
+}
+function rawStringsEqual(left: *const u8, right: *const u8): bool {
+  unsafe {
+    return tn_string_equals(left, tn_string_length(left), right, tn_string_length(right)) !== 0i32;
+  }
+}
+function emptyChildren(): Array<Element> {
+  return new Array<Element>({
+    capacity: 0usize
+  });
+}
+export class ElementNode implements Disposable {
+  public kind: i32;
+  public typeId: u64;
+  public key: Key;
+  public text: string;
+  public children: Array<Element>;
+  public style: StyleSnapshot;
+  public hasStyle: bool;
+  public render?: () => Element;
+  public action?: () => void;
+  public textChange?: (string) => void;
+  public booleanChange?: (bool) => void;
+  public numericChange?: (f32) => void;
+  public value: string;
+  public placeholder: string;
+  public imageSource: string;
+  public accessibilityLabel: string;
+  public accessibilityLabelPresent: bool;
+  public accessibilityRole: i32;
+  public accessibilityEnabled: bool;
+  public selected: bool;
+  public checked: bool;
+  public hasChecked: bool;
+  public numericValue: f32;
+  public minimumValue: f32;
+  public maximumValue: f32;
+  public hasNumericValue: bool;
+  public selectionStart: usize;
+  public selectionEnd: usize;
+  public hasSelection: bool;
+  public hasValue: bool;
+  public focused: bool;
+  public virtualized: bool;
+  public virtualItemCount: usize;
+  public virtualFirstIndex: usize;
+  public virtualItemHeight: f32;
+  public visibleRangeChange?: (usize) => void;
+  public mountedId: u64 | undefined;
+  public generation: u64;
+  private componentIdentity: u64;
+  private referencePointer: *mut ElementRef;
+  public constructor(kind: i32, typeId: u64, key: Key, text: string, children: Array<Element >) {
+    this.kind = kind;
+    this.typeId = typeId;
+    this.key = move key;
+    this.text = move text;
+    this.children = move children;
+    this.style = defaultStyleSnapshot();
+    this.hasStyle = false;
+    this.value = String("");
+    this.placeholder = String("");
+    this.imageSource = String("");
+    this.accessibilityLabel = String("");
+    this.accessibilityLabelPresent = false;
+    this.accessibilityRole = 0i32;
+    this.accessibilityEnabled = true;
+    this.selected = false;
+    this.checked = false;
+    this.hasChecked = false;
+    this.numericValue = 0.0f32;
+    this.minimumValue = 0.0f32;
+    this.maximumValue = 1.0f32;
+    this.hasNumericValue = false;
+    this.selectionStart = 0usize;
+    this.selectionEnd = 0usize;
+    this.hasSelection = false;
+    this.hasValue = false;
+    this.focused = false;
+    this.virtualized = false;
+    this.virtualItemCount = 0usize;
+    this.virtualFirstIndex = 0usize;
+    this.virtualItemHeight = 0.0f32;
+    this.visibleRangeChange = undefined;
+    this.mountedId = undefined;
+    this.generation = 0u64;
+    this.componentIdentity = 0u64;
+    unsafe {
+      this.referencePointer = nullPointer<ElementRef>();
+    }
+  }
+  public release(): void {
+    unsafe {
+      if (this.referencePointer !== nullPointer<ElementRef>()) {
+        let reference = &mut * this.referencePointer;
+        if (this.mountedId !== undefined) {
+          reference.detachIf(this.mountedId!, this.generation);
+        }
+      }
+    }
+    this.children.clear();
+    this.focused = false;
+    this.mountedId = undefined;
+    this.generation = 0u64;
+    this.componentIdentity = 0u64;
+    unsafe {
+      this.referencePointer = nullPointer<ElementRef>();
+    }
+  }
+  [Symbol.dispose](): void {
+    this.release();
+  }
+  public setComponentIdentity(identity: u64): void {
+    this.componentIdentity = identity;
+  }
+  public componentIdentityValue(): u64 {
+    return this.componentIdentity;
+  }
+  public unsafe setReferencePointer(pointer: *mut ElementRef): void {
+    this.referencePointer = pointer;
+  }
+  public unsafe referenceAddress(): *mut ElementRef {
+    return this.referencePointer;
+  }
+}
+export struct Element {
+  private node: ElementNode;
+  public static empty(): Element {
+    return {
+      node: new ElementNode(kindEmpty(), 0u64, emptyKey(), String(""), emptyChildren()),
+    };
+  }
+  public static fromNode(node: ElementNode): Element {
+    return {
+      node: move node
+    };
+  }
+  public isEmpty(): bool {
+    return this.node.typeId === 0u64;
+  }
+  public kind(): i32 {
+    return this.node.kind;
+  }
+  public kindCode(): i32 {
+    return this.node.kind;
+  }
+  public typeId(): u64 {
+    return this.node.typeId;
+  }
+  public mountedId(): u64 | undefined {
+    return this.node.mountedId;
+  }
+  public hasMountIdentity(): bool {
+    return this.node.mountedId !== undefined;
+  }
+  public mountedIdentity(): u64 {
+    if (this.node.mountedId === undefined) {
+      return 0;
+    }
+    return this.node.mountedId!;
+  }
+  public generation(): u64 {
+    return this.node.generation;
+  }
+  public referenceEquals(other: &Element): bool {
+    unsafe {
+      return this.node.referenceAddress() === other.node.referenceAddress();
+    }
+  }
+  public setMountIdentity(nodeId: u64, generation: u64): void {
+    this.node.mountedId = nodeId;
+    this.node.generation = generation;
+  }
+  public isComponent(): bool {
+    return this.node.kind === kindFunction();
+  }
+  public componentId(): ComponentId {
+    return {
+      identity: this.node.componentIdentityValue(),
+    };
+  }
+  public sameComponent(other: &Element): bool {
+    return this.componentId().equals( &other.componentId());
+  }
+  public keyIsPresent(): bool {
+    return this.node.key.kind !== 0i32;
+  }
+  public setKeyIfAbsent(key: Key): void {
+    if (this.node.key.kind === 0i32) {
+      this.node.key = move key;
+    }
+  }
+  public keyEquals(other: &Element): bool {
+    if (this.node.key.kind !== other.node.key.kind) {
+      return false;
+    }
+    if (this.node.key.kind === 0i32) {
+      return true;
+    }
+    if (this.node.key.kind === 1i32) {
+      unsafe {
+        return rawStringsEqual(this.node.key.text as *const u8, other.node.key.text as *const u8);
+      }
+    }
+    return this.node.key.integer === other.node.key.integer;
+  }
+  public keyIdentity(): u64 {
+    return this.node.key.identity;
+  }
+  public key(): Key {
+    return {
+      kind: this.node.key.kind, text: this.node.key.text.clone(), integer: this.node.key.integer, identity: this.node.key.identity,
+    };
+  }
+  public attachReference(nodeId: u64, generation: u64): void {
+    unsafe {
+      const pointer = this.node.referenceAddress();
+      if (pointer !== nullPointer<ElementRef>()) {
+        let reference = &mut * pointer;
+        reference.attach(nodeId, generation);
+      }
+    }
+  }
+  public detachReference(): void {
+    unsafe {
+      const pointer = this.node.referenceAddress();
+      if (pointer !== nullPointer<ElementRef>()) {
+        let reference = &mut * pointer;
+        if (this.node.mountedId !== undefined) {
+          reference.detachIf(this.node.mountedId!, this.node.generation);
+        }
+      }
+    }
+  }
+  public bindReference(reference: &ElementRef): void {
+    unsafe {
+      this.node.setReferencePointer(reference as *mut ElementRef);
+    }
+  }
+  public text(): string {
+    return this.node.text.clone();
+  }
+  public textEquals(other: &Element): bool {
+    unsafe {
+      return rawStringsEqual(this.node.text as *const u8, other.node.text as *const u8);
+    }
+  }
+  public textLength(): usize {
+    const value = this.node.text.clone();
+    return value.byteLength;
+  }
+  public childCount(): usize {
+    return this.node.children.length;
+  }
+  public childAt(index: usize): &Element | undefined {
+    return this.node.children.at(index);
+  }
+  public takeChild(index: usize): Element | undefined {
+    return this.node.children.takeAt(index);
+  }
+  public setChild(index: usize, child: Element): bool {
+    return this.node.children.set(index, move child);
+  }
+  public hasStyle(): bool {
+    return this.node.hasStyle;
+  }
+  public style(): StyleSnapshot {
+    return this.node.style;
+  }
+  public revision(): u64 {
+    if (!this.node.hasStyle) {
+      return 0;
+    }
+    return this.node.style.revision;
+  }
+  public setStyle(style: StyleSnapshot): void {
+    this.node.style = move style;
+    this.node.hasStyle = true;
+  }
+  public hasAction(): bool {
+    return this.node.action !== undefined;
+  }
+  public invokeAction(): void {
+    if (this.node.action !== undefined) {
+      this.node.action!();
+    }
+  }
+  public setFocused(value: bool): void {
+    this.node.focused = value;
+  }
+  public isFocused(): bool {
+    return this.node.focused;
+  }
+  public setVirtualList(itemCount: usize, firstIndex: usize, itemHeight: f32): void {
+    this.node.virtualized = true;
+    this.node.virtualItemCount = itemCount;
+    this.node.virtualFirstIndex = firstIndex;
+    this.node.virtualItemHeight = itemHeight;
+  }
+  public isVirtualized(): bool {
+    return this.node.virtualized;
+  }
+  public virtualItemCount(): usize {
+    return this.node.virtualItemCount;
+  }
+  public virtualFirstIndex(): usize {
+    return this.node.virtualFirstIndex;
+  }
+  public virtualItemHeight(): f32 {
+    return this.node.virtualItemHeight;
+  }
+  public setVisibleRangeChange(change: (usize) => void): void {
+    this.node.visibleRangeChange = move change;
+  }
+  public hasVisibleRangeChange(): bool {
+    return this.node.visibleRangeChange !== undefined;
+  }
+  public invokeVisibleRangeChange(firstIndex: usize): bool {
+    if (this.node.visibleRangeChange !== undefined) {
+      this.node.visibleRangeChange!(firstIndex);
+      return true;
+    }
+    return false;
+  }
+  public setAction(action: () => void): void {
+    this.node.action = move action;
+  }
+  public hasTextChange(): bool {
+    return this.node.textChange !== undefined;
+  }
+  public invokeTextChange(value: string): bool {
+    if (this.node.textChange !== undefined) {
+      this.node.textChange!(move value);
+      return true;
+    }
+    return false;
+  }
+  public setTextChange(change: (string) => void): void {
+    this.node.textChange = move change;
+  }
+  public hasBooleanChange(): bool {
+    return this.node.booleanChange !== undefined;
+  }
+  public invokeBooleanChange(value: bool): bool {
+    if (this.node.booleanChange !== undefined) {
+      this.node.booleanChange!(value);
+      return true;
+    }
+    return false;
+  }
+  public setBooleanChange(change: (bool) => void): void {
+    this.node.booleanChange = move change;
+  }
+  public hasNumericChange(): bool {
+    return this.node.numericChange !== undefined;
+  }
+  public invokeNumericChange(value: f32): bool {
+    if (this.node.numericChange !== undefined) {
+      this.node.numericChange!(value);
+      return true;
+    }
+    return false;
+  }
+  public setNumericChange(change: (f32) => void): void {
+    this.node.numericChange = move change;
+  }
+  public value(): string {
+    return this.node.value.clone();
+  }
+  public valueEquals(other: &Element): bool {
+    unsafe {
+      return rawStringsEqual(this.node.value as *const u8, other.node.value as *const u8);
+    }
+  }
+  public placeholder(): string {
+    return this.node.placeholder.clone();
+  }
+  public placeholderEquals(other: &Element): bool {
+    unsafe {
+      return rawStringsEqual(this.node.placeholder as *const u8, other.node.placeholder as *const u8);
+    }
+  }
+  public setValue(value: string): void {
+    this.node.value = move value;
+    this.node.hasValue = true;
+  }
+  public setPlaceholder(value: string): void {
+    this.node.placeholder = move value;
+  }
+  public imageSource(): string {
+    return this.node.imageSource.clone();
+  }
+  public imageSourceEquals(other: &Element): bool {
+    unsafe {
+      return rawStringsEqual(this.node.imageSource as *const u8, other.node.imageSource as *const u8);
+    }
+  }
+  public setImageSource(value: string): void {
+    this.node.imageSource = move value;
+  }
+  public setAccessibilityLabel(value: string): void {
+    this.node.accessibilityLabel = move value;
+    this.node.accessibilityLabelPresent = true;
+  }
+  public accessibilityLabel(): string {
+    return this.node.accessibilityLabel.clone();
+  }
+  public accessibilityLabelEquals(other: &Element): bool {
+    if (this.node.accessibilityLabelPresent !== other.node.accessibilityLabelPresent) {
+      return false;
+    }
+    if (!this.node.accessibilityLabelPresent) {
+      return true;
+    }
+    unsafe {
+      return rawStringsEqual(this.node.accessibilityLabel as *const u8, other.node.accessibilityLabel as *const u8);
+    }
+  }
+  public hasAccessibilityLabel(): bool {
+    return this.node.accessibilityLabelPresent;
+  }
+  public setAccessibilityRole(value: i32): void {
+    this.node.accessibilityRole = value;
+  }
+  public accessibilityRole(): i32 {
+    return this.node.accessibilityRole;
+  }
+  public setAccessibilityEnabled(value: bool): void {
+    this.node.accessibilityEnabled = value;
+  }
+  public accessibilityEnabled(): bool {
+    return this.node.accessibilityEnabled;
+  }
+  public selected(): bool {
+    return this.node.selected;
+  }
+  public checked(): bool {
+    return this.node.checked;
+  }
+  public setSelected(value: bool): void {
+    this.node.selected = value;
+  }
+  public isSelected(): bool {
+    return this.node.selected;
+  }
+  public setChecked(value: bool): void {
+    this.node.checked = value;
+    this.node.hasChecked = true;
+  }
+  public hasChecked(): bool {
+    return this.node.hasChecked;
+  }
+  public isChecked(): bool {
+    return this.node.checked;
+  }
+  public setNumericValue(value: f32): void {
+    this.node.numericValue = value;
+    this.node.hasNumericValue = true;
+  }
+  public hasNumericValue(): bool {
+    return this.node.hasNumericValue;
+  }
+  public numericValue(): f32 {
+    return this.node.numericValue;
+  }
+  public setValueRange(minimum: f32, maximum: f32): void {
+    this.node.minimumValue = minimum;
+    this.node.maximumValue = maximum;
+  }
+  public minimumValue(): f32 {
+    return this.node.minimumValue;
+  }
+  public maximumValue(): f32 {
+    return this.node.maximumValue;
+  }
+  public hasValue(): bool {
+    return this.node.hasValue;
+  }
+  public setSelection(start: usize, end: usize): void {
+    this.node.selectionStart = start;
+    this.node.selectionEnd = end;
+    this.node.hasSelection = true;
+  }
+  public hasSelection(): bool {
+    return this.node.hasSelection;
+  }
+  public selectionStart(): usize {
+    return this.node.selectionStart;
+  }
+  public selectionEnd(): usize {
+    return this.node.selectionEnd;
+  }
+  public hasRender(): bool {
+    return this.node.render !== undefined;
+  }
+  public render(): Element {
+    if (this.node.render === undefined) {
+      return Element.empty();
+    }
+    return this.node.render!();
+  }
+  public dispose(): void {
+    this.node.release();
+  }
+  public [Symbol.dispose](): void {
+    this.node.release();
+  }
+}
+export type ElementChild = Element;
+export class ElementRef {
+  private attached: bool;
+  private nodeId: u64;
+  private generation: u64;
+  public constructor() {
+    this.attached = false;
+    this.nodeId = 0u64;
+    this.generation = 0u64;
+  }
+  public attach(nodeId: u64, generation: u64): void {
+    this.attached = true;
+    this.nodeId = nodeId;
+    this.generation = generation;
+  }
+  public detach(): void {
+    this.attached = false;
+    this.nodeId = 0u64;
+    this.generation = this.generation + 1u64;
+  }
+  public detachIf(nodeId: u64, generation: u64): void {
+    if (this.attached && this.nodeId === nodeId && this.generation === generation) {
+      this.detach();
+    }
+  }
+  public isAttached(): bool {
+    return this.attached;
+  }
+  public nodeIdentity(): u64 | undefined {
+    if (!this.attached) {
+      return undefined;
+    }
+    return this.nodeId;
+  }
+  public current(): u64 | undefined {
+    if (!this.attached) {
+      return undefined;
+    }
+    return this.nodeId;
+  }
+  public generationValue(): u64 {
+    return this.generation;
+  }
+}
+export function createElementRef(): ElementRef {
+  return new ElementRef();
+}
+export function keyText(value: string): Key {
+  let identity: u64 = 0;
+  unsafe {
+    identity = tn_bytes_hash(value as *const u8, value.byteLength as c_size);
+  }
+  if (identity === 0u64) {
+    identity = 1u64;
+  }
+  return {
+    kind: 1i32, text: move value, integer: 0u64, identity: identity,
+  };
+}
+export function keyInteger(value: u64): Key {
+  return {
+    kind: 2i32, text: String(""), integer: value, identity: value,
+  };
+}
+export function keyNone(): Key {
+  return emptyKey();
+}
+function optionalKey(value: string | undefined): Key {
+  if (value === undefined) {
+    return emptyKey();
+  }
+  return keyText(move value!);
+}
+function optionalBorrowedKey(value: &str | undefined): Key {
+  if (value === undefined) {
+    return emptyKey();
+  }
+  return keyText(String(value!));
+}
+export function createComponent<Props>(typeId: u64, component: (Props) => Element, properties: Props, key: Key): Element {
+  const node = new ElementNode(kindFunction(), typeId, move key, String(""), emptyChildren());
+  node.setComponentIdentity(componentIdentity(component));
+  node.render = move(): Element => component(move properties);
+  return Element.fromNode(move node);
+}
+export function createElement<Props>(component: (Props) => Element, properties: Props, key: string | undefined): Element {
+  return createComponent<Props>(1u64, component, move properties, optionalKey(move key));
+}
+export function createElements<Props>(component: (Props) => Element, properties: Props, key: string | undefined): Element {
+  return createElement<Props>(component, move properties, move key);
+}
+export function jsx<Props>(component: (Props) => Element, properties: Props, key: &str | undefined): Element {
+  return createComponent<Props>(1u64, component, move properties, optionalBorrowedKey(move key));
+}
+export function jsxs<Props>(component: (Props) => Element, properties: Props, key: &str | undefined): Element {
+  return createComponent<Props>(1u64, component, move properties, optionalBorrowedKey(move key));
+}
+export function fragment(children: Array<Element >): Element {
+  return createFragment(move children);
+}
+function createFragmentArray(children: Array<Element >): Element {
+  return Element.fromNode(new ElementNode(kindFragment(), 6u64, emptyKey(), String(""), move children));
+}
+export function createFragment(children: Array<Element >): Element {
+  return createFragmentArray(move children);
+}
+export function createHost(kind: i32, typeId: u64, key: Key, text: string, children: Array<Element >): Element {
+  return Element.fromNode(new ElementNode(kind, typeId, move key, move text, move children));
+}
+export function createHostWithStyle(kind: i32, typeId: u64, key: Key, text: string, children: Array<Element>, style: StyleSnapshot): Element {
+  const element = createHost(kind, typeId, move key, move text, move children);
+  element.setStyle(move style);
+  return move element;
+}
+export function createHostAction(kind: i32, typeId: u64, key: Key, text: string, children: Array<Element>, action: () => void): Element {
+  const element = createHost(kind, typeId, move key, move text, move children);
+  element.setAction(move action);
+  return move element;
+}
+export function createHostActionWithStyle(kind: i32, typeId: u64, key: Key, text: string, children: Array<Element>, action: () => void, style: StyleSnapshot): Element {
+  const element = createHostAction(kind, typeId, move key, move text, move children, move action);
+  element.setStyle(move style);
+  return move element;
+}
+export function createText(text: &str): Element {
+  return createHost(kindText(), 1002u64, emptyKey(), String(text), emptyChildren());
+}
+export function createKeyedText(key: string, text: &str): Element {
+  return createHost(kindText(), 1002u64, keyText(move key), String(text), emptyChildren());
+}
+export function createFragmentElements(children: Array<Element >): Element {
+  return createFragmentArray(move children);
+}
+export function createHostSingle(kind: i32, typeId: u64, key: Key, child: Element): Element {
+  const children = new Array<Element>({
+    capacity: 1usize
+  });
+  children.push(move child);
+  return createHost(kind, typeId, move key, String(""), move children);
+}
+export function createHostSingleText(kind: i32, typeId: u64, key: Key, text: &str, child: Element): Element {
+  const children = new Array<Element>({
+    capacity: 1usize
+  });
+  children.push(move child);
+  return createHost(kind, typeId, move key, String(text), move children);
+}
+export function createTextInput(value: string, placeholder: string, change: (string) => void): Element {
+  const element = createHost(kindTextInput(), 1006u64, emptyKey(), String(""), emptyChildren());
+  element.setValue(move value);
+  element.setPlaceholder(move placeholder);
+  element.setTextChange(move change);
+  return move element;
+}
+export function createTextInputWithSelection(value: string, placeholder: string, change: (string) => void, selectionStart: usize | undefined, selectionEnd: usize | undefined): Element {
+  const element = createTextInput(move value, move placeholder, move change);
+  if (selectionStart !== undefined && selectionEnd !== undefined) {
+    element.setSelection(selectionStart!, selectionEnd!);
+  }
+  return move element;
+}
+export function bindElementRef(element: Element, reference: &ElementRef): Element {
+  element.bindReference(reference);
+  return move element;
+}
+export function hostChildCount(element: &Element): usize {
+  return element.childCount();
+}
+export function hostChildAt(element: &Element, index: usize): &Element | undefined {
+  return element.childAt(index);
+}
+export function hostSetChild(element: &mut Element, index: usize, child: Element): bool {
+  return element.setChild(index, move child);
+}
+export function dispatchPress(element: &Element): void {
+  element.invokeAction();
+}
+export function focusElement(element: &Element): void {
+  element.setFocused(true);
+}
+export function isFocused(element: &Element): bool {
+  return element.isFocused();
+}
+export function leaf(): Element {
+  return Element.empty();
+}
+export function kindEmpty(): i32 {
+  return 0;
+}
+export function kindFunction(): i32 {
+  return 1;
+}
+export function kindView(): i32 {
+  return 2;
+}
+export function kindText(): i32 {
+  return 3;
+}
+export function kindButton(): i32 {
+  return 4;
+}
+export function kindWindow(): i32 {
+  return 5;
+}
+export function kindFragment(): i32 {
+  return 6;
+}
+export function kindTextInput(): i32 {
+  return 7;
+}
+export function kindImage(): i32 {
+  return 8;
+}
+export function kindScrollView(): i32 {
+  return 9;
+}
+export function kindList(): i32 {
+  return 10;
+}
+export function kindSwitch(): i32 {
+  return 11;
+}
+export function kindSlider(): i32 {
+  return 12;
+}
+export function kindProgress(): i32 {
+  return 13;
+}
+export function kindMenu(): i32 {
+  return 14;
+}
+export function kindDialog(): i32 {
+  return 15;
+}
+export function kindToolbar(): i32 {
+  return 16;
+}
+export function kindSplitView(): i32 {
+  return 17;
+}
+export function kindStack(): i32 {
+  return 18;
+}
+export function kindGrid(): i32 {
+  return 19;
+}
+export function kindCanvas(): i32 {
+  return 20;
+}
+export function viewTypeId(): u64 {
+  return 1001;
+}
+export function textTypeId(): u64 {
+  return 1002;
+}
+export function buttonTypeId(): u64 {
+  return 1003;
+}
+export function windowTypeId(): u64 {
+  return 1004;
+}
+export function fragmentTypeId(): u64 {
+  return 1005;
+}
+export function textInputTypeId(): u64 {
+  return 1006;
+}
+export function imageTypeId(): u64 {
+  return 1007;
+}
+export function scrollViewTypeId(): u64 {
+  return 1008;
+}
+export function listTypeId(): u64 {
+  return 1009;
+}
+export function switchTypeId(): u64 {
+  return 1010;
+}
+export function sliderTypeId(): u64 {
+  return 1011;
+}
+export function progressTypeId(): u64 {
+  return 1012;
+}
+export function menuTypeId(): u64 {
+  return 1013;
+}
+export function dialogTypeId(): u64 {
+  return 1014;
+}
+export function toolbarTypeId(): u64 {
+  return 1015;
+}
+export function splitViewTypeId(): u64 {
+  return 1016;
+}
+export function stackTypeId(): u64 {
+  return 1017;
+}
+export function gridTypeId(): u64 {
+  return 1018;
+}
+export function canvasTypeId(): u64 {
+  return 1019;
+}

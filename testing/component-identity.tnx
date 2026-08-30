@@ -2,9 +2,9 @@ import { Array } from "std/collections";
 import { String } from "std/string";
 import { Text } from "../src/components";
 import { EmptyProps } from "../src/core/types";
-import { Cleanup, clearHooks, useEffect, useState } from "../src/hooks/hooks";
-import { createText, Element, fragmentElements, hostChildAt, jsx } from "../src/jsx-runtime";
+import { Cleanup, useEffect, useState } from "../src/hooks/hooks";
 import { HeadlessRenderer } from "../src/renderer/headless";
+import { createText, Element, createFragmentElements, hostChildAt, createElement } from "../src/tnx-runtime";
 
 static mut firstEffects: i32 = 0;
 static mut secondEffects: i32 = 0;
@@ -36,12 +36,19 @@ function secondEffect(): Cleanup {
   }
   return secondCleanup;
 }
+function stableDependencies(): Array<u64> {
+  const values = new Array<u64>({
+    capacity: 1usize,
+  });
+  values.push(1u64);
+  return move values;
+}
 function First(props: EmptyProps): Element {
-  useEffect(firstEffect, 1u64);
+  useEffect(firstEffect, stableDependencies());
   return <Text>first</Text>;
 }
 function Second(props: EmptyProps): Element {
-  useEffect(secondEffect, 1u64);
+  useEffect(secondEffect, stableDependencies());
   return <Text>second</Text>;
 }
 struct ItemProps {
@@ -49,8 +56,7 @@ struct ItemProps {
   public seed: i32;
 }
 function Item(props: ItemProps): Element {
-  const state = useState<i32>(props.seed);
-  const current = state.current();
+  const[current, _setCurrent] = useState<i32>(props.seed);
   unsafe {
     if (props.id === 1i32) {
       seenA = current;
@@ -67,23 +73,23 @@ function list(reverse: bool): Element {
   const keyA: string | undefined = "a";
   const keyB: string | undefined = "b";
   if (!reverse) {
-    children.push(jsx<ItemProps>(Item, {
+    children.push(createElement<ItemProps>(Item, {
       id: 1i32, seed: 10i32,
     }, keyA));
-    children.push(jsx<ItemProps>(Item, {
+    children.push(createElement<ItemProps>(Item, {
       id: 2i32, seed: 20i32,
     }, keyB));
   } else {
     const reverseKeyA: string | undefined = "a";
     const reverseKeyB: string | undefined = "b";
-    children.push(jsx<ItemProps>(Item, {
+    children.push(createElement<ItemProps>(Item, {
       id: 2i32, seed: 20i32,
     }, reverseKeyB));
-    children.push(jsx<ItemProps>(Item, {
+    children.push(createElement<ItemProps>(Item, {
       id: 1i32, seed: 10i32,
     }, reverseKeyA));
   }
-  return fragmentElements(move children);
+  return createFragmentElements(move children);
 }
 function singleItem(changedKey: bool): Element {
   const children = new Array<Element>({
@@ -95,20 +101,19 @@ function singleItem(changedKey: bool): Element {
     key = "remounted";
     seed = 30i32;
   }
-  children.push(jsx<ItemProps>(Item, {
+  children.push(createElement<ItemProps>(Item, {
     id: 1i32, seed: seed,
   }, key));
-  return fragmentElements(move children);
+  return createFragmentElements(move children);
 }
 function main(): i32 {
-  clearHooks();
   const firstKey: string | undefined = "same";
   const secondKey: string | undefined = "same";
-  const first = jsx<EmptyProps>(First, {
+  const first = createElement<EmptyProps>(First, {
   }, move firstKey);
-  const second = jsx<EmptyProps>(Second, {
+  const second = createElement<EmptyProps>(Second, {
   }, move secondKey);
-  if (first.typeId() === second.typeId()) {
+  if (first.sameComponent( &second)) {
     first.dispose();
     second.dispose();
     return 10;
@@ -117,7 +122,7 @@ function main(): i32 {
   second.dispose();
   using renderer = new HeadlessRenderer();
   const mountKey: string | undefined = "same";
-  renderer.mount(jsx<EmptyProps>(First, {
+  renderer.mount(createElement<EmptyProps>(First, {
   }, mountKey));
   unsafe {
     if (firstEffects !== 1i32 || secondEffects !== 0i32) {
@@ -126,7 +131,7 @@ function main(): i32 {
     }
   }
   const updateKey: string | undefined = "same";
-  renderer.update(jsx<EmptyProps>(Second, {
+  renderer.update(createElement<EmptyProps>(Second, {
   }, updateKey));
   unsafe {
     if (firstCleanups !== 1i32 || secondEffects !== 1i32) {
@@ -140,7 +145,6 @@ function main(): i32 {
       return 13;
     }
   }
-  clearHooks();
   using keyed = new HeadlessRenderer();
   keyed.mount(list(false));
   unsafe {
@@ -163,7 +167,6 @@ function main(): i32 {
     return 16;
   }
   keyed.unmount();
-  clearHooks();
   using remount = new HeadlessRenderer();
   remount.mount(singleItem(false));
   remount.update(singleItem(true));
@@ -174,6 +177,5 @@ function main(): i32 {
     }
   }
   remount.unmount();
-  clearHooks();
   return 0;
 }

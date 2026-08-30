@@ -1,0 +1,47 @@
+import { List } from "../src/components";
+import { HeadlessRenderer } from "../src/renderer/headless";
+import { Element, createText, kindList } from "../src/tnx-runtime";
+
+static mut latestRange: usize = 0;
+function renderItem(index: usize): Element {
+  return createText("Row");
+}
+function recordRange(firstIndex: usize): void {
+  unsafe {
+    latestRange = firstIndex;
+  }
+}
+function main(): i32 {
+  using renderer = new HeadlessRenderer();
+  const list = <List itemCount={10usize} renderItem={renderItem} itemHeight={24.0f32} firstVisibleIndex={5usize} visibleItemCount={2usize} overscan={1usize} onVisibleRangeChange={recordRange} />;
+  renderer.mount(move list);
+  const mounted = renderer.rootElement();
+  if (mounted.kind() !== kindList() || !mounted.isVirtualized() || mounted.virtualItemCount() !== 10usize || mounted.virtualFirstIndex() !== 5usize || mounted.virtualItemHeight() !== 24.0f32 || mounted.childCount() !== 3usize) {
+    renderer.unmount();
+    return 10;
+  }
+  const first = mounted.childAt(0usize);
+  const second = mounted.childAt(1usize);
+  const third = mounted.childAt(2usize);
+  if (first === undefined || second === undefined || third === undefined || first!.keyIdentity() !== 5u64 || second!.keyIdentity() !== 6u64 || third!.keyIdentity() !== 7u64 || first!.textLength() !== 3usize) {
+    renderer.unmount();
+    return 11;
+  }
+  if (renderer.simulateVisibleRangeChange(mounted, 8usize)) {
+    unsafe {
+      if (latestRange !== 8usize) {
+        renderer.unmount();
+        return 12;
+      }
+    }
+  } else {
+    renderer.unmount();
+    return 13;
+  }
+  if (renderer.simulateVisibleRangeChange(mounted, 5usize)) {
+    renderer.unmount();
+    return 14;
+  }
+  renderer.unmount();
+  return 0;
+}

@@ -1,7 +1,7 @@
 import { Text, styledView } from "../src/components";
 import { EmptyProps, Style, styleSetHeight, styleSetPadding, styleSetWidth } from "../src/core/types";
-import { Element, hostChildAt } from "../src/jsx-runtime";
-import { renderTree } from "../src/reconciler/reconciler";
+import { HeadlessRenderer } from "../src/renderer/headless";
+import { Element, hostChildAt } from "../src/tnx-runtime";
 
 function Root(props: EmptyProps): Element {
   const style = new Style();
@@ -14,16 +14,18 @@ function Root(props: EmptyProps): Element {
   return styledView( &style, move child);
 }
 function main(): i32 {
-  const root = renderTree(<Root />);
+  using renderer = new HeadlessRenderer();
+  renderer.mount(<Root />);
+  const root = renderer.rootElement();
   const content = hostChildAt(root, 0usize);
-  if (!root.hasStyle() || root.styleSnapshot().width !== 120.0f32 || root.styleSnapshot().height !== 80.0f32 || root.styleSnapshot().padding !== 4.0f32) {
-    root.dispose();
+  if (!root.hasStyle() || root.style().width !== 120.0f32 || root.style().height !== 80.0f32 || root.style().padding !== 4.0f32) {
+    renderer.unmount();
     return 10;
   }
   if (content === undefined || content!.textLength() !== 2usize) {
-    root.dispose();
+    renderer.unmount();
     return 11;
   }
-  root.dispose();
+  renderer.unmount();
   return 0;
 }

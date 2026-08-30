@@ -1,4 +1,4 @@
-import { Element, ElementRef } from "../jsx-runtime";
+import { Element, ElementRef } from "../tnx-runtime";
 export enum FlexDirection {
   Row, Column,
 }
@@ -228,11 +228,17 @@ export struct WindowProps {
   public width?: f32;
   public height?: f32;
   public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
 }
 export struct ViewProps {
   public style?: Style;
   public children: Element;
   public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
 }
 export struct TextSpan {
   private pointer: *const u8;
@@ -253,9 +259,149 @@ export struct TextSpan {
 export struct TextProps {
   public children: string;
   public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
 }
 export struct ButtonProps {
   public children: string;
   public onPress: () => void;
   public elementRef?: &ElementRef;
+  public enabled?: bool;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct TextInputProps {
+  public value?: string;
+  public defaultValue?: string;
+  public placeholder?: string;
+  public onChange?: (string) => void;
+  public elementRef?: &ElementRef;
+  public selectionStart?: usize;
+  public selectionEnd?: usize;
+  public enabled?: bool;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct ImageProps {
+  public source: string;
+  public alt?: string;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct ScrollViewProps {
+  public children: Element;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct ListProps {
+  public itemCount: usize;
+  public renderItem: (usize) => Element;
+  public itemHeight: f32;
+  public firstVisibleIndex?: usize;
+  public visibleItemCount?: usize;
+  public overscan?: usize;
+  public onVisibleRangeChange?: (usize) => void;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct SwitchProps {
+  public value?: bool;
+  public defaultValue?: bool;
+  public onChange?: (bool) => void;
+  public elementRef?: &ElementRef;
+  public enabled?: bool;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct SliderProps {
+  public value?: f32;
+  public defaultValue?: f32;
+  public minimumValue?: f32;
+  public maximumValue?: f32;
+  public onChange?: (f32) => void;
+  public elementRef?: &ElementRef;
+  public enabled?: bool;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct ProgressProps {
+  public value: f32;
+  public minimumValue?: f32;
+  public maximumValue?: f32;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct MenuProps {
+  public children?: Element;
+  public title?: string;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct DialogProps {
+  public title: string;
+  public children: Element;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct ToolbarProps {
+  public children: Element;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct SplitViewProps {
+  public children: Element;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct StackProps {
+  public children: Element;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct GridProps {
+  public children: Element;
+  public columns?: usize;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
+}
+export struct CanvasProps {
+  public children?: Element;
+  public style?: Style;
+  public elementRef?: &ElementRef;
+  public accessibilityLabel?: string;
+  public accessibilityRole?: i32;
+  public accessibilityEnabled?: bool;
 }

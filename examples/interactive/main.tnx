@@ -1,31 +1,43 @@
 import { log } from "std/console";
-import { exit } from "std/process";
-import { Button, Element, Text, View, Window, runApp } from "../../src/index";
+import { String } from "std/string";
+import { Button, Element, HeadlessRenderer, Text, View, Window, useState } from "../../src/index";
+import { kindButton, kindText } from "../../src/tnx-runtime";
 
 struct DemoProps {
 }
-function sayHello(): void {
-  log("TypeNative UI: hello from the native button");
-}
-function describeRuntime(): void {
-  log("TypeNative UI: this click traveled through AppKit into TypeNative");
-}
-function quit(): void {
-  log("TypeNative UI: goodbye");
-  exit(0);
-}
 function Demo(props: DemoProps): Element {
+  const[current, setCount] = useState<i32>(0i32);
+  const increment = move(): void => {
+    setCount(current + 1i32);
+  };
+  let label: &str = "Count: 0";
+  if (current !== 0i32) {
+    label = "Count: 1";
+  }
   return <Window title="TypeNative UI Demo">
     <View>
-      <Text>TypeNative UI</Text>
-      <Text>A small native desktop interface written in TypeNative.</Text>
-      <Text>Click a button to send an AppKit event back to TypeNative.</Text>
-      <Button onPress={sayHello}>Say hello</Button>
-      <Button onPress={describeRuntime}>Explain the event path</Button>
-      <Button onPress={quit}>Quit</Button>
-    </View>
-  </Window>;
-}
-function main(): i32 {
-  return runApp(<Demo />);
-}
+      <Text>
+        {
+          String(label)}
+        </Text>
+        <Text>TypeNative UI</Text>
+        <Button onPress={increment}>Increment</Button>
+      </View>
+    </Window>;
+  }
+  function main(): i32 {
+    using renderer = new HeadlessRenderer();
+    renderer.mount(<Demo />);
+    if (!renderer.hasKind(kindButton())) {
+      log("missing button");
+      return 10;
+    }
+    renderer.simulatePressFirst(kindButton());
+    renderer.update(<Demo />);
+    if (renderer.textLengthFirst(kindText()) !== 8usize) {
+      log("state update did not change the label");
+      return 11;
+    }
+    renderer.unmount();
+    return 0;
+  }

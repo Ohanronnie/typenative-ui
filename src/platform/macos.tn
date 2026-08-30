@@ -1,31 +1,54 @@
-import { rawAlloc, rawFree, nullPointer } from "std/alloc";
+import { byteAddress, f64ToUsize, nullPointer, rawAlloc, rawFree, sizeOf, storeRaw, usizeToF32, usizeToU64 } from "std/alloc";
+import { Array } from "std/collections";
 import { Disposable } from "std/core";
 import { c_size } from "std/ffi";
+import { fromRaw, String } from "std/string";
 import { threadId } from "std/thread";
-import { batch } from "../hooks/hooks";
-import { dispatchActionSlot, disposeRaw, Element, hostChildAt, hostChildCount, kindButton, kindFragment, kindText, kindView, kindWindow, StyleSnapshot } from "../jsx-runtime";
+import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "../reconciler/mutations";
+import { Reconciler } from "../reconciler/reconciler";
+import { defaultStyleSnapshot, Element, dispatchPress, hostChildAt, hostChildCount, kindButton, kindCanvas, kindDialog, kindFragment, kindGrid, kindImage, kindList, kindMenu, kindProgress, kindScrollView, kindSlider, kindSplitView, kindStack, kindSwitch, kindText, kindTextInput, kindToolbar, kindView, kindWindow, StyleSnapshot } from "../tnx-runtime";
 
+extern struct NativeRect {
+  public x: f64;
+  public y: f64;
+  public width: f64;
+  public height: f64;
+}
 declare extern "C" {
   function NSApplicationLoad(): bool;
+  function pthread_main_np(): i32;
   function objc_getClass(name: *const u8): *mut u8;
   function sel_registerName(name: *const u8): *mut u8;
   function objc_msgSend(receiver: *mut u8, selector: *mut u8, argument: *mut u8): *mut u8;
+  function objc_msgSendBool(receiver: *mut u8, selector: *mut u8, value: bool): *mut u8;
+  function objc_msgSendU64(receiver: *mut u8, selector: *mut u8, value: u64): *mut u8;
   function objc_msgSendSize(receiver: *mut u8, selector: *mut u8, width: f64, height: f64): *mut u8;
   function objc_msgSendRect(receiver: *mut u8, selector: *mut u8, x: f64, y: f64, width: f64, height: f64): *mut u8;
+  function objc_msgSendF64(receiver: *mut u8, selector: *mut u8, value: f64): *mut u8;
+  function objc_msgSendBoolResult(receiver: *mut u8, selector: *mut u8): bool;
+  function objc_msgSendF64Result(receiver: *mut u8, selector: *mut u8): f64;
+  function objc_msgSendRange(receiver: *mut u8, selector: *mut u8, location: u64, length: u64): *mut u8;
+  function objc_msgSendSelectorObjectBool(receiver: *mut u8, selector: *mut u8, selectorArgument: *mut u8, objectArgument: *mut u8, waitUntilDone: bool): *mut u8;
+  function objc_msgSendNativeRect(receiver: *mut u8, selector: *mut u8): NativeRect;
   function objc_allocateClassPair(superclass: *mut u8, name: *const u8, extraBytes: c_size): *mut u8;
   function objc_registerClassPair(classPointer: *mut u8): void;
   function class_addMethod(classPointer: *mut u8, selector: *mut u8, implementation: *mut u8, types: *const u8): bool;
+  function class_getInstanceSize(classPointer: *mut u8): c_size;
   function class_createInstance(classPointer: *mut u8, extraBytes: c_size): *mut u8;
-  function tn_bytes_copy_to_at(source: *const u8, sourceLength: c_size, sourceOffset: c_size, count: c_size, destination: *mut u8, destinationLength: c_size, destinationOffset: c_size): i32;
-  function tn_bytes_write_u8(bytes: *mut u8, length: c_size, index: c_size, value: u8): i32;
+  function strlen(value: *const u8): c_size;
   function YGNodeNew(): *mut u8;
   function YGNodeFree(node: *mut u8): void;
-  function YGNodeFreeRecursive(node: *mut u8): void;
+  function YGNodeRemoveChild(node: *mut u8, child: *mut u8): void;
   function YGNodeInsertChild(node: *mut u8, child: *mut u8, index: c_size): void;
   function YGNodeCalculateLayout(node: *mut u8, width: f32, height: f32, direction: i32): void;
-  function YGNodeGetChild(node: *mut u8, index: c_size): *mut u8;
   function YGNodeStyleSetWidth(node: *mut u8, value: f32): void;
   function YGNodeStyleSetHeight(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetWidthAuto(node: *mut u8): void;
+  function YGNodeStyleSetHeightAuto(node: *mut u8): void;
+  function YGNodeStyleSetMinWidth(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetMinHeight(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetMaxWidth(node: *mut u8, value: f32): void;
+  function YGNodeStyleSetMaxHeight(node: *mut u8, value: f32): void;
   function YGNodeStyleSetDirection(node: *mut u8, direction: i32): void;
   function YGNodeStyleSetFlexDirection(node: *mut u8, direction: i32): void;
   function YGNodeStyleSetJustifyContent(node: *mut u8, value: i32): void;
@@ -39,18 +62,13 @@ declare extern "C" {
   function YGNodeStyleSetFlexShrink(node: *mut u8, value: f32): void;
   function YGNodeStyleSetFlexBasis(node: *mut u8, value: f32): void;
   function YGNodeStyleSetFlexBasisAuto(node: *mut u8): void;
+  function YGNodeStyleSetGap(node: *mut u8, gutter: i32, value: f32): void;
+  function YGNodeStyleSetAspectRatio(node: *mut u8, value: f32): void;
   function YGNodeStyleSetPosition(node: *mut u8, edge: i32, value: f32): void;
   function YGNodeStyleSetPositionAuto(node: *mut u8, edge: i32): void;
   function YGNodeStyleSetMargin(node: *mut u8, edge: i32, value: f32): void;
   function YGNodeStyleSetPadding(node: *mut u8, edge: i32, value: f32): void;
-  function YGNodeStyleSetGap(node: *mut u8, gutter: i32, value: f32): void;
-  function YGNodeStyleSetWidthAuto(node: *mut u8): void;
-  function YGNodeStyleSetHeightAuto(node: *mut u8): void;
-  function YGNodeStyleSetMinWidth(node: *mut u8, value: f32): void;
-  function YGNodeStyleSetMinHeight(node: *mut u8, value: f32): void;
-  function YGNodeStyleSetMaxWidth(node: *mut u8, value: f32): void;
-  function YGNodeStyleSetMaxHeight(node: *mut u8, value: f32): void;
-  function YGNodeStyleSetAspectRatio(node: *mut u8, value: f32): void;
+  function YGNodeGetChild(node: *mut u8, index: c_size): *mut u8;
   function YGNodeLayoutGetLeft(node: *mut u8): f32;
   function YGNodeLayoutGetTop(node: *mut u8): f32;
   function YGNodeLayoutGetWidth(node: *mut u8): f32;
@@ -61,19 +79,16 @@ function nullRaw(): *mut u8 {
     return nullPointer<u8>();
   }
 }
-function nullConst(): *const u8 {
-  unsafe {
-    return nullPointer<u8>()as *const u8;
-  }
-}
 function cString(value: &str): *mut u8 {
   const length = value.byteLength;
   unsafe {
     const bytes = rawAlloc(length + 1usize);
-    if (length > 0usize) {
-      tn_bytes_copy_to_at(value as *const u8, length as c_size, 0, length as c_size, bytes,(length + 1usize)as c_size, 0);
+    let index: usize = 0;
+    while (index<length) {
+      *(byteAddress(bytes as *const u8, index)) = *(byteAddress(value as *const u8, index));
+      index = index + 1usize;
     }
-    tn_bytes_write_u8(bytes,(length + 1usize)as c_size, length as c_size, 0u8);
+    *(byteAddress(bytes as *const u8, length)) = 0u8;
     return bytes;
   }
 }
@@ -102,6 +117,24 @@ function send(receiver: *mut u8, selectorName: &str, argument: *mut u8): *mut u8
     return objc_msgSend(receiver, selector, argument);
   }
 }
+function sendBool(receiver: *mut u8, selectorName: &str, value: bool): void {
+  if (receiver === nullRaw()) {
+    return;
+  }
+  const selector = select(selectorName);
+  unsafe {
+    objc_msgSendBool(receiver, selector, value);
+  }
+}
+function sendU64(receiver: *mut u8, selectorName: &str, value: u64): void {
+  if (receiver === nullRaw()) {
+    return;
+  }
+  const selector = select(selectorName);
+  unsafe {
+    objc_msgSendU64(receiver, selector, value);
+  }
+}
 function sendSize(receiver: *mut u8, selectorName: &str, width: f64, height: f64): void {
   if (receiver === nullRaw()) {
     return;
@@ -120,198 +153,65 @@ function sendRect(receiver: *mut u8, selectorName: &str, x: f64, y: f64, width: 
     objc_msgSendRect(receiver, selector, x, y, width, height);
   }
 }
+function sendNativeRect(receiver: *mut u8, selectorName: &str): NativeRect {
+  if (receiver === nullRaw()) {
+    return {
+      x: 0.0, y: 0.0, width: 0.0, height: 0.0,
+    };
+  }
+  const selector = select(selectorName);
+  unsafe {
+    return objc_msgSendNativeRect(receiver, selector);
+  }
+}
+function sendF64(receiver: *mut u8, selectorName: &str, value: f64): void {
+  if (receiver === nullRaw()) {
+    return;
+  }
+  const selector = select(selectorName);
+  unsafe {
+    objc_msgSendF64(receiver, selector, value);
+  }
+}
+function sendBoolResult(receiver: *mut u8, selectorName: &str): bool {
+  if (receiver === nullRaw()) {
+    return false;
+  }
+  const selector = select(selectorName);
+  unsafe {
+    return objc_msgSendBoolResult(receiver, selector);
+  }
+}
+function sendF64Result(receiver: *mut u8, selectorName: &str): f64 {
+  if (receiver === nullRaw()) {
+    return 0.0;
+  }
+  const selector = select(selectorName);
+  unsafe {
+    return objc_msgSendF64Result(receiver, selector);
+  }
+}
+function sendRange(receiver: *mut u8, selectorName: &str, location: usize, length: usize): void {
+  if (receiver === nullRaw()) {
+    return;
+  }
+  const selector = select(selectorName);
+  unsafe {
+    objc_msgSendRange(receiver, selector, usizeToU64(location), usizeToU64(length));
+  }
+}
+function sendSelectorObjectBool(receiver: *mut u8, selectorName: &str, selectorArgumentName: &str, objectArgument: *mut u8, waitUntilDone: bool): void {
+  if (receiver === nullRaw()) {
+    return;
+  }
+  const selector = select(selectorName);
+  const selectorArgument = select(selectorArgumentName);
+  unsafe {
+    objc_msgSendSelectorObjectBool(receiver, selector, selectorArgument, objectArgument, waitUntilDone);
+  }
+}
 function classSend(className: &str, selectorName: &str, argument: *mut u8): *mut u8 {
   return send(classPointer(className), selectorName, argument);
-}
-static mut actionTargetClass: *mut u8 = nullPointer<u8>();
-static mut actionSelector: *mut u8 = nullPointer<u8>();
-static mut actionTarget0: *mut u8 = nullPointer<u8>();
-static mut actionTarget1: *mut u8 = nullPointer<u8>();
-static mut actionTarget2: *mut u8 = nullPointer<u8>();
-static mut actionTarget3: *mut u8 = nullPointer<u8>();
-static mut actionTarget4: *mut u8 = nullPointer<u8>();
-static mut actionTarget5: *mut u8 = nullPointer<u8>();
-static mut actionTarget6: *mut u8 = nullPointer<u8>();
-static mut actionTarget7: *mut u8 = nullPointer<u8>();
-static mut actionSlot0: i32 = - 1i32;
-static mut actionSlot1: i32 = - 1i32;
-static mut actionSlot2: i32 = - 1i32;
-static mut actionSlot3: i32 = - 1i32;
-static mut actionSlot4: i32 = - 1i32;
-static mut actionSlot5: i32 = - 1i32;
-static mut actionSlot6: i32 = - 1i32;
-static mut actionSlot7: i32 = - 1i32;
-function nativeButtonCallback(receiver: *mut u8, selector: *mut u8, sender: *mut u8): void {
-  unsafe {
-    if (receiver === actionTarget0) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot0);
-      });
-      return;
-    }
-    if (receiver === actionTarget1) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot1);
-      });
-      return;
-    }
-    if (receiver === actionTarget2) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot2);
-      });
-      return;
-    }
-    if (receiver === actionTarget3) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot3);
-      });
-      return;
-    }
-    if (receiver === actionTarget4) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot4);
-      });
-      return;
-    }
-    if (receiver === actionTarget5) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot5);
-      });
-      return;
-    }
-    if (receiver === actionTarget6) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot6);
-      });
-      return;
-    }
-    if (receiver === actionTarget7) {
-      batch(move(): void => {
-        dispatchActionSlot(actionSlot7);
-      });
-    }
-  }
-}
-function ensureActionClass(): *mut u8 {
-  unsafe {
-    if (actionTargetClass !== nullPointer<u8>()) {
-      return actionTargetClass;
-    }
-  }
-  let classPointerValue = classPointer("TNUIActionTarget");
-  if (classPointerValue === nullRaw()) {
-    const superclass = classPointer("NSObject");
-    const className = cString("TNUIActionTarget");
-    unsafe {
-      classPointerValue = objc_allocateClassPair(superclass, className as *const u8, 0 as c_size);
-      rawFree(className);
-    }
-    if (classPointerValue === nullRaw()) {
-      return nullRaw();
-    }
-    const selector = select("tnuiAction:");
-    const encoding = cString("v@:@");
-    unsafe {
-      class_addMethod(classPointerValue, selector, nativeButtonCallback as *mut u8, encoding as *const u8);
-      rawFree(encoding);
-      objc_registerClassPair(classPointerValue);
-    }
-  }
-  unsafe {
-    actionTargetClass = classPointerValue;
-    actionSelector = select("tnuiAction:");
-    return actionTargetClass;
-  }
-}
-function registerActionTarget(slot: i32): *mut u8 {
-  const classPointerValue = ensureActionClass();
-  if (classPointerValue === nullRaw()) {
-    return nullRaw();
-  }
-  let target: *mut u8 = nullRaw();
-  unsafe {
-    target = class_createInstance(classPointerValue, 0 as c_size);
-  }
-  if (target === nullRaw()) {
-    return nullRaw();
-  }
-  unsafe {
-    if (actionTarget0 === nullPointer<u8>()) {
-      actionTarget0 = target;
-      actionSlot0 = slot;
-      return target;
-    }
-    if (actionTarget1 === nullPointer<u8>()) {
-      actionTarget1 = target;
-      actionSlot1 = slot;
-      return target;
-    }
-    if (actionTarget2 === nullPointer<u8>()) {
-      actionTarget2 = target;
-      actionSlot2 = slot;
-      return target;
-    }
-    if (actionTarget3 === nullPointer<u8>()) {
-      actionTarget3 = target;
-      actionSlot3 = slot;
-      return target;
-    }
-    if (actionTarget4 === nullPointer<u8>()) {
-      actionTarget4 = target;
-      actionSlot4 = slot;
-      return target;
-    }
-    if (actionTarget5 === nullPointer<u8>()) {
-      actionTarget5 = target;
-      actionSlot5 = slot;
-      return target;
-    }
-    if (actionTarget6 === nullPointer<u8>()) {
-      actionTarget6 = target;
-      actionSlot6 = slot;
-      return target;
-    }
-    if (actionTarget7 === nullPointer<u8>()) {
-      actionTarget7 = target;
-      actionSlot7 = slot;
-      return target;
-    }
-  }
-  send(target, "release", nullRaw());
-  return nullRaw();
-}
-function releaseTarget(target: *mut u8): void {
-  if (target !== nullRaw()) {
-    send(target, "release", nullRaw());
-  }
-}
-function clearActionTargets(): void {
-  unsafe {
-    releaseTarget(actionTarget0);
-    releaseTarget(actionTarget1);
-    releaseTarget(actionTarget2);
-    releaseTarget(actionTarget3);
-    releaseTarget(actionTarget4);
-    releaseTarget(actionTarget5);
-    releaseTarget(actionTarget6);
-    releaseTarget(actionTarget7);
-    actionTarget0 = nullRaw();
-    actionTarget1 = nullRaw();
-    actionTarget2 = nullRaw();
-    actionTarget3 = nullRaw();
-    actionTarget4 = nullRaw();
-    actionTarget5 = nullRaw();
-    actionTarget6 = nullRaw();
-    actionTarget7 = nullRaw();
-    actionSlot0 = - 1i32;
-    actionSlot1 = - 1i32;
-    actionSlot2 = - 1i32;
-    actionSlot3 = - 1i32;
-    actionSlot4 = - 1i32;
-    actionSlot5 = - 1i32;
-    actionSlot6 = - 1i32;
-    actionSlot7 = - 1i32;
-  }
 }
 function nativeObject(className: &str): *mut u8 {
   const object = classSend(className, "alloc", nullRaw());
@@ -324,78 +224,1727 @@ function nativeObject(className: &str): *mut u8 {
   }
   return initialized;
 }
-function elementTextPointer(element: Element): *mut u8 {
-  let pointer: *const u8 = nullConst();
+function foundationString(value: &str): *mut u8 {
+  const bytes = cString(value);
+  const object = classSend("NSString", "stringWithUTF8String:", bytes);
   unsafe {
-    pointer = element.textPointer();
-    return pointer as *mut u8;
+    rawFree(bytes);
+  }
+  return object;
+}
+function setFoundationString(receiver: *mut u8, selectorName: &str, value: &str): void {
+  const object = foundationString(value);
+  if (object !== nullRaw()) {
+    send(receiver, selectorName, object);
   }
 }
-function nativeText(element: Element): *mut u8 {
+function nativeStringEquals(receiver: *mut u8, selectorName: &str, value: &str): bool {
+  if (receiver === nullRaw()) {
+    return false;
+  }
+  const object = send(receiver, selectorName, nullRaw());
+  if (object === nullRaw()) {
+    return false;
+  }
+  const characters = send(object, "UTF8String", nullRaw());
+  if (characters === nullRaw()) {
+    return false;
+  }
+  let length: usize = 0;
+  unsafe {
+    length = strlen(characters as *const u8)as usize;
+  }
+  if (length !== value.byteLength) {
+    return false;
+  }
+  let index: usize = 0;
+  while (index<length) {
+    unsafe {
+      if ( *(byteAddress(characters as *const u8, index)) !== *(byteAddress(value as *const u8, index))) {
+        return false;
+      }
+    }
+    index = index + 1usize;
+  }
+  return true;
+}
+function nativeWindow(element: &Element): *mut u8 {
+  const window = nativeObject("NSWindow");
+  if (window === nullRaw()) {
+    return nullRaw();
+  }
+  sendU64(window, "setStyleMask:", 15u64);
+  let width = 480.0;
+  let height = 320.0;
+  if (element.hasStyle()) {
+    const style = element.style();
+    if (style.width > 0.0f32) {
+      width = style.width as f64;
+    }
+    if (style.height > 0.0f32) {
+      height = style.height as f64;
+    }
+  }
+  sendSize(window, "setContentSize:", width, height);
+  const title = element.text();
+  setFoundationString(window, "setTitle:", &title);
+  send(window, "center", nullRaw());
+  return window;
+}
+function nativeText(element: &Element): *mut u8 {
   const field = nativeObject("NSTextField");
   if (field === nullRaw()) {
     return nullRaw();
   }
-  const textPointer = elementTextPointer(element);
-  const stringObject = classSend("NSString", "stringWithUTF8String:", textPointer);
-  if (stringObject !== nullRaw()) {
-    send(field, "setStringValue:", stringObject);
-  }
+  sendBool(field, "setEditable:", false);
+  sendBool(field, "setBezeled:", false);
+  sendBool(field, "setDrawsBackground:", false);
+  sendBool(field, "setSelectable:", false);
+  const text = element.text();
+  setFoundationString(field, "setStringValue:", &text);
   return field;
 }
-function nativeButton(element: Element): *mut u8 {
+function nativeButton(element: &Element): *mut u8 {
   const button = nativeObject("NSButton");
   if (button === nullRaw()) {
     return nullRaw();
   }
-  const title = classSend("NSString", "stringWithUTF8String:", elementTextPointer(element));
-  if (title !== nullRaw()) {
-    send(button, "setTitle:", title);
-  }
-  const target = registerActionTarget(element.actionSlotId());
-  if (target !== nullRaw()) {
-    send(button, "setTarget:", target);
-    unsafe {
-      send(button, "setAction:", actionSelector);
-    }
-  }
+  const title = element.text();
+  setFoundationString(button, "setTitle:", &title);
   return button;
 }
-function nativeNode(element: Element): *mut u8 {
+function nativeTextInput(element: &Element): *mut u8 {
+  const field = nativeObject("NSTextField");
+  if (field === nullRaw()) {
+    return nullRaw();
+  }
+  sendBool(field, "setEditable:", true);
+  sendBool(field, "setSelectable:", true);
+  const value = element.value();
+  const placeholder = element.placeholder();
+  setFoundationString(field, "setStringValue:", &value);
+  setFoundationString(field, "setPlaceholderString:", &placeholder);
+  return field;
+}
+function nativeView(element: &Element): *mut u8 {
+  return nativeObject("NSView");
+}
+function nativeImage(element: &Element): *mut u8 {
+  const imageView = nativeObject("NSImageView");
+  if (imageView === nullRaw()) {
+    return nullRaw();
+  }
+  sendU64(imageView, "setImageScaling:", 2u64);
+  const source = element.imageSource();
+  if (source.byteLength !== 0usize) {
+    const path = foundationString( &source);
+    if (path !== nullRaw()) {
+      const image = classSend("NSImage", "imageWithContentsOfFile:", path);
+      if (image !== nullRaw()) {
+        send(imageView, "setImage:", image);
+      }
+    }
+  }
+  return imageView;
+}
+function nativeScrollView(element: &Element): *mut u8 {
+  const scrollView = nativeObject("NSScrollView");
+  if (scrollView === nullRaw()) {
+    return nullRaw();
+  }
+  const documentView = nativeObject("NSView");
+  if (documentView !== nullRaw()) {
+    send(scrollView, "setDocumentView:", documentView);
+    send(documentView, "release", nullRaw());
+  }
+  sendBool(scrollView, "setHasVerticalScroller:", true);
+  sendBool(scrollView, "setHasHorizontalScroller:", false);
+  sendBool(scrollView, "setDrawsBackground:", false);
+  return scrollView;
+}
+function nativeSwitch(element: &Element): *mut u8 {
+  const toggle = nativeObject("NSButton");
+  if (toggle === nullRaw()) {
+    return nullRaw();
+  }
+  sendU64(toggle, "setButtonType:", 3u64);
+  if (element.hasChecked()) {
+    sendU64(toggle, "setState:", element.isChecked()?1u64: 0u64);
+  }
+  return toggle;
+}
+function nativeSlider(element: &Element): *mut u8 {
+  const slider = nativeObject("NSSlider");
+  if (slider === nullRaw()) {
+    return nullRaw();
+  }
+  sendF64(slider, "setMinValue:", element.minimumValue()as f64);
+  sendF64(slider, "setMaxValue:", element.maximumValue()as f64);
+  if (element.hasNumericValue()) {
+    sendF64(slider, "setDoubleValue:", element.numericValue()as f64);
+  }
+  sendBool(slider, "setContinuous:", true);
+  return slider;
+}
+function nativeProgress(element: &Element): *mut u8 {
+  const progress = nativeObject("NSProgressIndicator");
+  if (progress === nullRaw()) {
+    return nullRaw();
+  }
+  sendBool(progress, "setIndeterminate:", false);
+  sendF64(progress, "setMinValue:", element.minimumValue()as f64);
+  sendF64(progress, "setMaxValue:", element.maximumValue()as f64);
+  if (element.hasNumericValue()) {
+    sendF64(progress, "setDoubleValue:", element.numericValue()as f64);
+  }
+  return progress;
+}
+function nativeSplitView(element: &Element): *mut u8 {
+  const split = nativeObject("NSSplitView");
+  if (split === nullRaw()) {
+    return nullRaw();
+  }
+  sendBool(split, "setVertical:", true);
+  return split;
+}
+function nativeMenu(element: &Element): *mut u8 {
+  const menu = nativeObject("NSMenu");
+  if (menu === nullRaw()) {
+    return nullRaw();
+  }
+  const title = element.text();
+  setFoundationString(menu, "setTitle:", &title);
+  sendBool(menu, "setAutoenablesItems:", false);
+  return menu;
+}
+function nativeToolbar(element: &Element): *mut u8 {
+  const allocated = classSend("NSToolbar", "alloc", nullRaw());
+  if (allocated === nullRaw()) {
+    return nullRaw();
+  }
+  const identifier = foundationString("TypeNativeToolbar");
+  const toolbar = send(allocated, "initWithIdentifier:", identifier);
+  if (toolbar === nullRaw()) {
+    send(allocated, "release", nullRaw());
+    return nullRaw();
+  }
+  sendU64(toolbar, "setDisplayMode:", 2u64);
+  return toolbar;
+}
+function nativeDialog(element: &Element): *mut u8 {
+  const panel = nativeObject("NSPanel");
+  if (panel === nullRaw()) {
+    return nullRaw();
+  }
+  sendU64(panel, "setStyleMask:", 15u64);
+  sendBool(panel, "setFloatingPanel:", true);
+  sendSize(panel, "setContentSize:", 360.0, 220.0);
+  const title = element.text();
+  setFoundationString(panel, "setTitle:", &title);
+  return panel;
+}
+function nativeForElement(element: &Element): *mut u8 {
+  if (element.kind() === kindWindow()) {
+    return nativeWindow(element);
+  }
   if (element.kind() === kindText()) {
     return nativeText(element);
   }
   if (element.kind() === kindButton()) {
     return nativeButton(element);
   }
-  if (element.kind() === kindView() || element.kind() === kindFragment() || element.kind() === kindWindow()) {
-    return nativeObject("NSView");
+  if (element.kind() === kindTextInput()) {
+    return nativeTextInput(element);
   }
-  return nativeObject("NSView");
+  if (element.kind() === kindImage()) {
+    return nativeImage(element);
+  }
+  if (element.kind() === kindScrollView() || element.kind() === kindList()) {
+    return nativeScrollView(element);
+  }
+  if (element.kind() === kindSwitch()) {
+    return nativeSwitch(element);
+  }
+  if (element.kind() === kindSlider()) {
+    return nativeSlider(element);
+  }
+  if (element.kind() === kindProgress()) {
+    return nativeProgress(element);
+  }
+  if (element.kind() === kindSplitView()) {
+    return nativeSplitView(element);
+  }
+  if (element.kind() === kindDialog()) {
+    return nativeDialog(element);
+  }
+  if (element.kind() === kindMenu()) {
+    return nativeMenu(element);
+  }
+  if (element.kind() === kindToolbar()) {
+    return nativeToolbar(element);
+  }
+  if (element.kind() === kindStack() || element.kind() === kindGrid() || element.kind() === kindCanvas()) {
+    return nativeView(element);
+  }
+  if (element.kind() === kindView() || element.kind() === kindFragment()) {
+    return nativeView(element);
+  }
+  return nativeView(element);
 }
-function nativeTree(element: Element): *mut u8 {
-  const native = nativeNode(element);
-  if (native === nullRaw()) {
+function parentNode(id: i32): i32 | undefined {
+  return id;
+}
+function nativeContainer(parentNative: *mut u8, parentKind: i32): *mut u8 {
+  if (parentNative === nullRaw()) {
     return nullRaw();
   }
-  unsafe {
-    element.setNativeHandle(native);
+  if (parentKind === kindWindow() || parentKind === kindDialog()) {
+    return send(parentNative, "contentView", nullRaw());
   }
+  if (parentKind === kindScrollView() || parentKind === kindList()) {
+    const document = send(parentNative, "documentView", nullRaw());
+    if (document !== nullRaw()) {
+      return document;
+    }
+  }
+  return parentNative;
+}
+function ancestorOfKind(records: &mut Array<NativeRecord>, nodeId: i32, kind: i32): i32 | undefined {
+  let parent = recordParentId(records, nodeId);
+  while (parent !== undefined) {
+    if (recordKind(records, parent!) === kind) {
+      return parent!;
+    }
+    parent = recordParentId(records, parent!);
+  }
+  return undefined;
+}
+struct NativeActionContext {
+  public renderer: *mut u8;
+  public identity: u64;
+  public kind: i32;
+}
+struct NativeRecord {
+  public nodeId: i32;
+  public identity: u64;
+  public parentId: i32 | undefined;
+  public kind: i32;
+  public native: *mut u8;
+  public yoga: *mut u8;
+  public target: *mut u8;
+  public children: Array<i32>;
+}
+function newNativeRecord(nodeId: i32, identity: u64, parentId: i32 | undefined, kind: i32, native: *mut u8, yoga: *mut u8, target: *mut u8): NativeRecord {
+  return {
+    nodeId: nodeId, identity: identity, parentId: parentId, kind: kind, native: native, yoga: yoga, target: target, children: new Array<i32>({
+      capacity: 0usize
+    }),
+  };
+}
+function recordIndex(records: &Array<NativeRecord>, nodeId: i32): usize | undefined {
   let index: usize = 0;
-  while (index<hostChildCount(element)) {
-    const child = hostChildAt(element, index);
-    if (child !== undefined) {
-      const childNative = nativeTree(child!);
-      if (childNative !== nullRaw()) {
-        send(native, "addSubview:", childNative);
-      }
+  while (index<records.length) {
+    const entry = records.at(index);
+    if (entry !== undefined && entry!.nodeId === nodeId) {
+      return index;
     }
     index = index + 1usize;
   }
-  if (element.kind() === kindText() || element.kind() === kindButton()) {
-    send(native, "sizeToFit", nullRaw());
+  return undefined;
+}
+function recordPointer(records: &mut Array<NativeRecord>, nodeId: i32): *mut NativeRecord {
+  const index = recordIndex(records, nodeId);
+  if (index === undefined) {
+    unsafe {
+      return nullPointer<NativeRecord>();
+    }
   }
-  return native;
+  const entry = records.atMut(index!);
+  if (entry === undefined) {
+    unsafe {
+      return nullPointer<NativeRecord>();
+    }
+  }
+  unsafe {
+    return entry!as *mut NativeRecord;
+  }
+}
+function recordNodeId(records: &mut Array<NativeRecord>, index: usize): i32 | undefined {
+  const entry = records.at(index);
+  if (entry === undefined) {
+    return undefined;
+  }
+  return entry!.nodeId;
+}
+function recordNative(records: &mut Array<NativeRecord>, nodeId: i32): *mut u8 {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return nullPointer<u8>();
+    }
+    return( & *(pointer as *const NativeRecord)).native;
+  }
+}
+function recordYoga(records: &mut Array<NativeRecord>, nodeId: i32): *mut u8 {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return nullPointer<u8>();
+    }
+    return( & *(pointer as *const NativeRecord)).yoga;
+  }
+}
+function recordTarget(records: &mut Array<NativeRecord>, nodeId: i32): *mut u8 {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return nullPointer<u8>();
+    }
+    return( & *(pointer as *const NativeRecord)).target;
+  }
+}
+function recordParentId(records: &mut Array<NativeRecord>, nodeId: i32): i32 | undefined {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return undefined;
+    }
+    return( & *(pointer as *const NativeRecord)).parentId;
+  }
+}
+function recordIdentity(records: &mut Array<NativeRecord>, nodeId: i32): u64 {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return 0;
+    }
+    return( & *(pointer as *const NativeRecord)).identity;
+  }
+}
+function recordKind(records: &mut Array<NativeRecord>, nodeId: i32): i32 {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return 0;
+    }
+    return( & *(pointer as *const NativeRecord)).kind;
+  }
+}
+function recordChildCount(records: &mut Array<NativeRecord>, nodeId: i32): usize {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return 0;
+    }
+    return( & *(pointer as *const NativeRecord)).children.length;
+  }
+}
+function recordChildAt(records: &mut Array<NativeRecord>, nodeId: i32, index: usize): i32 | undefined {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer === nullPointer<NativeRecord>()) {
+      return undefined;
+    }
+    const value =( & *(pointer as *const NativeRecord)).children.at(index);
+    if (value === undefined) {
+      return undefined;
+    }
+    return *(value!);
+  }
+}
+function nullElement(): *mut Element {
+  unsafe {
+    return nullPointer<Element>();
+  }
+}
+function recordAppendChild(records: &mut Array<NativeRecord>, nodeId: i32, childId: i32): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).children.push(childId);
+    }
+  }
+}
+function recordRemoveFirstChild(records: &mut Array<NativeRecord>, nodeId: i32): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).children.removeAt(0usize);
+    }
+  }
+}
+function recordClearChildren(records: &mut Array<NativeRecord>, nodeId: i32): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).children.clear();
+    }
+  }
+}
+function recordSetIdentity(records: &mut Array<NativeRecord>, nodeId: i32, identity: u64): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).identity = identity;
+    }
+  }
+}
+function recordSetKind(records: &mut Array<NativeRecord>, nodeId: i32, kind: i32): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).kind = kind;
+    }
+  }
+}
+function recordSetNative(records: &mut Array<NativeRecord>, nodeId: i32, native: *mut u8): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).native = native;
+    }
+  }
+}
+function recordSetYoga(records: &mut Array<NativeRecord>, nodeId: i32, yoga: *mut u8): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).yoga = yoga;
+    }
+  }
+}
+function recordSetTarget(records: &mut Array<NativeRecord>, nodeId: i32, target: *mut u8): void {
+  const pointer = recordPointer(records, nodeId);
+  unsafe {
+    if (pointer !== nullPointer<NativeRecord>()) {
+      ( &mut *(pointer as *mut NativeRecord)).target = target;
+    }
+  }
+}
+function findElementPointer(element: *mut Element, identity: u64): *mut Element {
+  unsafe {
+    if (element === nullElement()) {
+      return nullPointer<Element>();
+    }
+    const current = & *(element as *mut Element);
+    if (current.hasMountIdentity() && current.mountedIdentity() === identity) {
+      return element;
+    }
+    let index: usize = 0;
+    while (index<hostChildCount(current)) {
+      const child = hostChildAt(current, index);
+      if (child !== undefined) {
+        const childPointer = child!as *mut Element;
+        const found = findElementPointer(childPointer, identity);
+        if (found !== nullPointer<Element>()) {
+          return found;
+        }
+      }
+      index = index + 1usize;
+    }
+    return nullPointer<Element>();
+  }
+}
+function releaseNativeRecord(entry: &mut NativeRecord): void {
+  if (entry.target !== nullRaw()) {
+    if (entry.native !== nullRaw()) {
+      if (entry.kind === kindButton() || entry.kind === kindSwitch() || entry.kind === kindSlider()) {
+        send(entry.native, "setTarget:", nullRaw());
+        send(entry.native, "setAction:", nullRaw());
+      } else if (entry.kind === kindTextInput()) {
+        send(entry.native, "setDelegate:", nullRaw());
+      } else if (entry.kind === kindList()) {
+        send(entry.native, "setDelegate:", nullRaw());
+      }
+    }
+    send(entry.target, "release", nullRaw());
+    entry.target = nullRaw();
+  }
+  if (entry.native !== nullRaw()) {
+    if (entry.kind === kindWindow() || entry.kind === kindDialog()) {
+      send(entry.native, "orderOut:", nullRaw());
+      send(entry.native, "close", nullRaw());
+    } else if (entry.kind === kindMenu() || entry.kind === kindToolbar()) {
+      // NSMenu and NSToolbar are owned objects, but they are not NSViews and
+      // therefore must not receive removeFromSuperview.
+    } else {
+      send(entry.native, "removeFromSuperview", nullRaw());
+    }
+    send(entry.native, "release", nullRaw());
+    entry.native = nullRaw();
+  }
+  if (entry.yoga !== nullRaw()) {
+    unsafe {
+      YGNodeFree(entry.yoga);
+    }
+    entry.yoga = nullRaw();
+  }
+}
+export class NativeRenderer implements Disposable {
+  private application: *mut u8;
+  private window: *mut u8;
+  private records: Array<NativeRecord>;
+  private reconciler: Reconciler;
+  private uiThread: u64;
+  private started: bool;
+  private mounted: bool;
+  private factory?: () => Element;
+  private updating: bool;
+  private rerenderQueued: bool;
+  private schedulerTarget: *mut u8;
+  private selfPointer: *mut u8;
+  public constructor() {
+    this.application = nullRaw();
+    this.window = nullRaw();
+    this.records = new Array<NativeRecord>({
+      capacity: 0usize
+    });
+    this.reconciler = new Reconciler();
+    this.uiThread = 0u64;
+    this.started = false;
+    this.mounted = false;
+    this.factory = undefined;
+    this.updating = false;
+    this.rerenderQueued = false;
+    this.schedulerTarget = nullRaw();
+    this.selfPointer = nullRaw();
+    unsafe {
+      this.selfPointer = this as *mut NativeRenderer as *mut u8;
+    }
+  }
+  private onUIThread(): bool {
+    unsafe {
+      if (pthread_main_np() === 0i32) {
+        return false;
+      }
+    }
+    return this.uiThread !== 0u64 && threadId() === this.uiThread;
+  }
+  public start(): bool {
+    unsafe {
+      if (pthread_main_np() === 0i32) {
+        return false;
+      }
+    }
+    if (this.started) {
+      return this.onUIThread();
+    }
+    this.uiThread = threadId();
+    unsafe {
+      if (!NSApplicationLoad()) {
+        return false;
+      }
+    }
+    this.application = classSend("NSApplication", "sharedApplication", nullRaw());
+    if (this.application === nullRaw()) {
+      return false;
+    }
+    this.schedulerTarget = createActionTarget(this.selfPointer, 0u64, 0i32);
+    sendU64(this.application, "setActivationPolicy:", 0u64);
+    this.started = true;
+    return true;
+  }
+  private clearNativeRecords(): void {
+    while (this.records.length > 0usize) {
+      const firstId = recordNodeId( &mut this.records, 0usize);
+      if (firstId === undefined) {
+        break;
+      }
+      this.destroyNode(firstId!);
+    }
+    this.records.clear();
+  }
+  private destroyChildren(nodeId: i32): void {
+    while (true) {
+      if (recordChildCount( &mut this.records, nodeId) === 0usize) {
+        break;
+      }
+      const childId = recordChildAt( &mut this.records, nodeId, 0usize);
+      if (childId === undefined) {
+        break;
+      }
+      const parentYoga = recordYoga( &mut this.records, nodeId);
+      const childYoga = recordYoga( &mut this.records, childId!);
+      if (parentYoga !== nullRaw() && childYoga !== nullRaw()) {
+        unsafe {
+          YGNodeRemoveChild(parentYoga, childYoga);
+        }
+      }
+      this.destroyNode(childId!);
+      recordRemoveFirstChild( &mut this.records, nodeId);
+    }
+  }
+  private destroyNode(nodeId: i32): void {
+    const index = recordIndex( &this.records, nodeId);
+    if (index === undefined) {
+      return;
+    }
+    this.destroyChildren(nodeId);
+    const removed = this.records.removeAt(index!);
+    if (removed !== undefined) {
+      let removedEntry = move removed!;
+      releaseNativeRecord( &mut removedEntry);
+    }
+  }
+  private createYoga(element: &Element): *mut u8 {
+    let yoga: *mut u8 = nullRaw();
+    unsafe {
+      yoga = YGNodeNew();
+    }
+    if (yoga === nullRaw()) {
+      return nullRaw();
+    }
+    if (element.hasStyle()) {
+      const style = element.style();
+      unsafe {
+        applyStyle(yoga, &style);
+      }
+    } else if (element.kind() === kindWindow()) {
+      unsafe {
+        YGNodeStyleSetWidth(yoga, 480.0f32);
+        YGNodeStyleSetHeight(yoga, 320.0f32);
+      }
+    } else if (element.kind() === kindText()) {
+      unsafe {
+        YGNodeStyleSetHeight(yoga, 24.0f32);
+      }
+    } else if (element.kind() === kindButton() || element.kind() === kindTextInput() || element.kind() === kindSwitch()) {
+      unsafe {
+        YGNodeStyleSetHeight(yoga, 32.0f32);
+      }
+    } else if (element.kind() === kindSlider() || element.kind() === kindProgress()) {
+      unsafe {
+        YGNodeStyleSetHeight(yoga, 24.0f32);
+      }
+    } else {
+      unsafe {
+        YGNodeStyleSetFlexDirection(yoga, 0i32);
+      }
+    }
+    return yoga;
+  }
+  private attachNative(parentId: i32, childId: i32, index: usize): void {
+    const parentNative = recordNative( &mut this.records, parentId);
+    const childNative = recordNative( &mut this.records, childId);
+    const parentYoga = recordYoga( &mut this.records, parentId);
+    const childYoga = recordYoga( &mut this.records, childId);
+    const parentKind = recordKind( &mut this.records, parentId);
+    const childKind = recordKind( &mut this.records, childId);
+    if (parentNative === nullRaw() || childNative === nullRaw()) {
+      if (parentYoga === nullRaw() || childYoga === nullRaw()) {
+        return;
+      }
+    }
+    if (parentNative !== nullRaw() && childNative !== nullRaw()) {
+      if (childKind === kindDialog()) {
+        send(childNative, "makeKeyAndOrderFront:", nullRaw());
+      } else if (childKind === kindToolbar()) {
+        let windowId: i32 | undefined = undefined;
+        if (parentKind === kindWindow()) {
+          windowId = parentId;
+        } else {
+          windowId = ancestorOfKind( &mut this.records, parentId, kindWindow());
+        }
+        if (windowId !== undefined) {
+          const windowNative = recordNative( &mut this.records, windowId!);
+          send(windowNative, "setToolbar:", childNative);
+        }
+      } else if (childKind === kindMenu()) {
+        let windowId: i32 | undefined = undefined;
+        if (parentKind === kindWindow()) {
+          windowId = parentId;
+        } else {
+          windowId = ancestorOfKind( &mut this.records, parentId, kindWindow());
+        }
+        if (windowId !== undefined) {
+          const windowNative = recordNative( &mut this.records, windowId!);
+          send(windowNative, "setMenu:", childNative);
+        }
+      } else if (parentKind !== kindMenu() && parentKind !== kindToolbar()) {
+        const container = nativeContainer(parentNative, parentKind);
+        if (container !== nullRaw()) {
+          send(container, "addSubview:", childNative);
+        }
+      }
+    }
+    if (parentYoga !== nullRaw() && childYoga !== nullRaw()) {
+      unsafe {
+        YGNodeInsertChild(parentYoga, childYoga, index as c_size);
+      }
+    }
+    recordAppendChild( &mut this.records, parentId, childId);
+  }
+  private attachNativeWithoutLink(parentId: i32, childId: i32, index: usize): void {
+    const parentNative = recordNative( &mut this.records, parentId);
+    const childNative = recordNative( &mut this.records, childId);
+    const parentYoga = recordYoga( &mut this.records, parentId);
+    const childYoga = recordYoga( &mut this.records, childId);
+    const parentKind = recordKind( &mut this.records, parentId);
+    const childKind = recordKind( &mut this.records, childId);
+    if (parentNative === nullRaw() || childNative === nullRaw()) {
+      if (parentYoga === nullRaw() || childYoga === nullRaw()) {
+        return;
+      }
+    }
+    if (parentNative !== nullRaw() && childNative !== nullRaw()) {
+      if (childKind === kindDialog()) {
+        send(childNative, "makeKeyAndOrderFront:", nullRaw());
+      } else if (childKind === kindToolbar()) {
+        let windowId: i32 | undefined = undefined;
+        if (parentKind === kindWindow()) {
+          windowId = parentId;
+        } else {
+          windowId = ancestorOfKind( &mut this.records, parentId, kindWindow());
+        }
+        if (windowId !== undefined) {
+          const windowNative = recordNative( &mut this.records, windowId!);
+          send(windowNative, "setToolbar:", childNative);
+        }
+      } else if (childKind === kindMenu()) {
+        let windowId: i32 | undefined = undefined;
+        if (parentKind === kindWindow()) {
+          windowId = parentId;
+        } else {
+          windowId = ancestorOfKind( &mut this.records, parentId, kindWindow());
+        }
+        if (windowId !== undefined) {
+          const windowNative = recordNative( &mut this.records, windowId!);
+          send(windowNative, "setMenu:", childNative);
+        }
+      } else if (parentKind !== kindMenu() && parentKind !== kindToolbar()) {
+        const container = nativeContainer(parentNative, parentKind);
+        if (container !== nullRaw()) {
+          send(container, "addSubview:", childNative);
+        }
+      }
+    }
+    if (parentYoga !== nullRaw() && childYoga !== nullRaw()) {
+      unsafe {
+        YGNodeInsertChild(parentYoga, childYoga, index as c_size);
+      }
+    }
+  }
+  private createNode(element: *mut Element, nodeId: i32, parentId: i32 | undefined): void {
+    if (element === nullElement()) {
+      return;
+    }
+    if (recordIndex( &this.records, nodeId) !== undefined) {
+      return;
+    }
+    let kind: i32 = 0;
+    let identity: u64 = 0;
+    unsafe {
+      kind =( & *(element as *mut Element)).kind();
+      if (!( & *(element as *mut Element)).hasMountIdentity()) {
+        return;
+      }
+      identity =( & *(element as *mut Element)).mountedIdentity();
+    }
+    const rendererPointer = this.selfPointer;
+    let native: *mut u8 = nullRaw();
+    let yoga: *mut u8 = nullRaw();
+    unsafe {
+      native = nativeForElement( & *(element as *mut Element));
+      yoga = this.createYoga( & *(element as *mut Element));
+    }
+    let target = nullRaw();
+    if (kind === kindButton() || kind === kindTextInput() || kind === kindSwitch() || kind === kindSlider() || kind === kindList()) {
+      target = createActionTarget(rendererPointer, identity, kind);
+      if (target !== nullRaw() && native !== nullRaw()) {
+        if (kind === kindButton() || kind === kindSwitch() || kind === kindSlider()) {
+          send(native, "setTarget:", target);
+          send(native, "setAction:", select("tnuiAction:"));
+        } else if (kind === kindTextInput()) {
+          send(native, "setDelegate:", target);
+        } else {
+          send(native, "setDelegate:", target);
+        }
+      }
+    }
+    this.records.push(newNativeRecord(nodeId, identity, parentId, kind, native, yoga, target));
+    unsafe {
+      updateNativeProperties(native, & *(element as *mut Element));
+    }
+    if (kind === kindWindow()) {
+      this.window = native;
+    }
+    if (parentId !== undefined) {
+      const index = recordChildCount( &mut this.records, parentId!);
+      this.attachNative(parentId!, nodeId, index);
+    }
+  }
+  private buildSubtree(element: *mut Element, parentId: i32 | undefined): void {
+    if (element === nullElement()) {
+      return;
+    }
+    let identity: u64 = 0;
+    unsafe {
+      if (!( & *(element as *mut Element)).hasMountIdentity()) {
+        return;
+      }
+      identity =( & *(element as *mut Element)).mountedIdentity();
+    }
+    const nodeId = this.reconciler.nodeIdForIdentity(identity);
+    if (nodeId === undefined) {
+      return;
+    }
+    this.createNode(element, nodeId!, parentId);
+    let index: usize = 0;
+    let count: usize = 0;
+    unsafe {
+      count = hostChildCount( & *(element as *mut Element));
+    }
+    while (index<count) {
+      let childPointer: *mut Element = nullElement();
+      unsafe {
+        const child = hostChildAt( & *(element as *mut Element), index);
+        if (child !== undefined) {
+          childPointer = child!as *mut Element;
+        }
+      }
+      if (childPointer !== nullElement()) {
+        this.buildSubtree(childPointer, parentNode(nodeId!));
+      }
+      index = index + 1usize;
+    }
+  }
+  private syncChildren(parentId: i32, element: *mut Element): void {
+    if (element === nullElement() || recordIndex( &this.records, parentId) === undefined) {
+      return;
+    }
+    const parentNative = recordNative( &mut this.records, parentId);
+    const parentYoga = recordYoga( &mut this.records, parentId);
+    const parentKind = recordKind( &mut this.records, parentId);
+    while (true) {
+      if (recordChildCount( &mut this.records, parentId) === 0usize) {
+        break;
+      }
+      const childId = recordChildAt( &mut this.records, parentId, 0usize);
+      if (childId === undefined) {
+        break;
+      }
+      const childNative = recordNative( &mut this.records, childId!);
+      const childYoga = recordYoga( &mut this.records, childId!);
+      const childKind = recordKind( &mut this.records, childId!);
+      if (childNative !== nullRaw()) {
+        if (parentNative !== nullRaw() && parentKind !== kindMenu() && parentKind !== kindToolbar() && childKind !== kindMenu() && childKind !== kindToolbar()) {
+          send(childNative, "removeFromSuperview", nullRaw());
+        }
+      }
+      if (parentYoga !== nullRaw() && childYoga !== nullRaw()) {
+        unsafe {
+          YGNodeRemoveChild(parentYoga, childYoga);
+        }
+      }
+      recordRemoveFirstChild( &mut this.records, parentId);
+    }
+    let count: usize = 0;
+    unsafe {
+      count = hostChildCount( & *(element as *mut Element));
+    }
+    let index: usize = 0;
+    while (index<count) {
+      let childIdentity: u64 = 0;
+      unsafe {
+        const child = hostChildAt( & *(element as *mut Element), index);
+        if (child !== undefined) {
+          if (child!.hasMountIdentity()) {
+            childIdentity = child!.mountedIdentity();
+          }
+        }
+      }
+      const childId = this.reconciler.nodeIdForIdentity(childIdentity);
+      if (childId !== undefined) {
+        this.attachNative(parentId, childId!, index);
+      }
+      index = index + 1usize;
+    }
+  }
+  private updateNode(element: *mut Element, nodeId: i32): void {
+    if (element === nullElement()) {
+      return;
+    }
+    const native = recordNative( &mut this.records, nodeId);
+    const yoga = recordYoga( &mut this.records, nodeId);
+    unsafe {
+      updateNativeProperties(native, & *(element as *mut Element));
+    }
+    let hasStyle: bool = false;
+    unsafe {
+      hasStyle =( & *(element as *mut Element)).hasStyle();
+    }
+    if (yoga !== nullRaw()) {
+      let style = defaultStyleSnapshot();
+      if (hasStyle) {
+        unsafe {
+          style =( & *(element as *mut Element)).style();
+        }
+      }
+      unsafe {
+        applyStyle(yoga, &style);
+      }
+    }
+  }
+  private replaceNode(element: *mut Element, nodeId: i32): void {
+    if (element === nullElement() || recordIndex( &this.records, nodeId) === undefined) {
+      this.createNode(element, nodeId, undefined);
+      return;
+    }
+    const parentId = recordParentId( &mut this.records, nodeId);
+    const oldNative = recordNative( &mut this.records, nodeId);
+    const oldYoga = recordYoga( &mut this.records, nodeId);
+    const oldTarget = recordTarget( &mut this.records, nodeId);
+    const oldKind = recordKind( &mut this.records, nodeId);
+    const oldIdentity = recordIdentity( &mut this.records, nodeId);
+    let parentIndex: usize = 0;
+    if (parentId !== undefined) {
+      while (parentIndex<recordChildCount( &mut this.records, parentId!)) {
+        const childId = recordChildAt( &mut this.records, parentId!, parentIndex);
+        if (childId !== undefined && childId! === nodeId) {
+          break;
+        }
+        parentIndex = parentIndex + 1usize;
+      }
+    }
+    if (parentId !== undefined) {
+      const parentYoga = recordYoga( &mut this.records, parentId!);
+      if (parentYoga !== nullRaw() && oldYoga !== nullRaw()) {
+        unsafe {
+          YGNodeRemoveChild(parentYoga, oldYoga);
+        }
+      }
+    }
+    let oldRecord = newNativeRecord(nodeId, oldIdentity, parentId, oldKind, oldNative, oldYoga, oldTarget);
+    releaseNativeRecord( &mut oldRecord);
+    let kind: i32 = 0;
+    let identity: u64 = 0;
+    unsafe {
+      kind =( & *(element as *mut Element)).kind();
+      if (!( & *(element as *mut Element)).hasMountIdentity()) {
+        return;
+      }
+      identity =( & *(element as *mut Element)).mountedIdentity();
+    }
+    const rendererPointer = this.selfPointer;
+    let native: *mut u8 = nullRaw();
+    let yoga: *mut u8 = nullRaw();
+    unsafe {
+      native = nativeForElement( & *(element as *mut Element));
+      yoga = this.createYoga( & *(element as *mut Element));
+    }
+    let target = nullRaw();
+    if (kind === kindButton() || kind === kindTextInput() || kind === kindSwitch() || kind === kindSlider() || kind === kindList()) {
+      target = createActionTarget(rendererPointer, identity, kind);
+      if (target !== nullRaw() && native !== nullRaw()) {
+        if (kind === kindButton() || kind === kindSwitch() || kind === kindSlider()) {
+          send(native, "setTarget:", target);
+          send(native, "setAction:", select("tnuiAction:"));
+        } else if (kind === kindTextInput()) {
+          send(native, "setDelegate:", target);
+        } else {
+          send(native, "setDelegate:", target);
+        }
+      }
+    }
+    recordSetIdentity( &mut this.records, nodeId, identity);
+    recordSetKind( &mut this.records, nodeId, kind);
+    recordSetNative( &mut this.records, nodeId, native);
+    recordSetYoga( &mut this.records, nodeId, yoga);
+    recordSetTarget( &mut this.records, nodeId, target);
+    unsafe {
+      updateNativeProperties(native, & *(element as *mut Element));
+    }
+    recordClearChildren( &mut this.records, nodeId);
+    if (kind === kindWindow()) {
+      this.window = native;
+    }
+    if (parentId !== undefined) {
+      this.attachNativeWithoutLink(parentId!, nodeId, parentIndex);
+    }
+  }
+  private applyMutation(mutation: &Mutation): void {
+    const root = selfRootPointer( &mut this.reconciler);
+    if (mutation.kind === mutationRemove()) {
+      if (mutation.parentId !== undefined) {
+        const parentYoga = recordYoga( &mut this.records, mutation.parentId!);
+        const childYoga = recordYoga( &mut this.records, mutation.nodeId);
+        if (parentYoga !== nullRaw() && childYoga !== nullRaw()) {
+          unsafe {
+            YGNodeRemoveChild(parentYoga, childYoga);
+          }
+        }
+      }
+      this.destroyNode(mutation.nodeId);
+      if (mutation.parentId !== undefined) {
+        const parent = findElementPointer(root, selfNodeIdentity( &mut this.reconciler, mutation.parentId!));
+        if (parent !== nullElement()) {
+          this.syncChildren(mutation.parentId!, parent);
+        }
+      }
+      return;
+    }
+    if (!this.reconciler.hasNode(mutation.nodeId)) {
+      return;
+    }
+    const identity = selfNodeIdentity( &mut this.reconciler, mutation.nodeId);
+    const element = findElementPointer(root, identity);
+    if (element === nullElement()) {
+      return;
+    }
+    if (mutation.kind === mutationCreate()) {
+      this.createNode(element, mutation.nodeId, mutation.parentId);
+    } else if (mutation.kind === mutationInsert()) {
+      this.buildSubtree(element, mutation.parentId);
+      if (mutation.parentId !== undefined) {
+        const parent = findElementPointer(root, selfNodeIdentity( &mut this.reconciler, mutation.parentId!));
+        if (parent !== nullElement()) {
+          this.syncChildren(mutation.parentId!, parent);
+        }
+      }
+    } else if (mutation.kind === mutationMove()) {
+      if (mutation.parentId === undefined) {
+        return;
+      }
+      const parent = findElementPointer(root, selfNodeIdentity( &mut this.reconciler, mutation.parentId!));
+      if (parent !== nullElement()) {
+        this.syncChildren(mutation.parentId!, parent);
+      }
+    } else if (mutation.kind === mutationUpdate()) {
+      this.updateNode(element, mutation.nodeId);
+    } else if (mutation.kind === mutationReplace()) {
+      this.destroyChildren(mutation.nodeId);
+      this.replaceNode(element, mutation.nodeId);
+    }
+  }
+  private applyMutations(): void {
+    let index: usize = 0;
+    while (index<this.reconciler.mutationCount()) {
+      const mutation = this.reconciler.mutationAt(index);
+      if (mutation !== undefined) {
+        this.applyMutation( &mutation!);
+      }
+      index = index + 1usize;
+    }
+  }
+  private applyFrames(element: *mut Element, parentX: f32, parentY: f32, parentHeight: f32): void {
+    if (element === nullElement()) {
+      return;
+    }
+    let identity: u64 = 0;
+    unsafe {
+      if (!( & *(element as *mut Element)).hasMountIdentity()) {
+        return;
+      }
+      identity =( & *(element as *mut Element)).mountedIdentity();
+    }
+    const nodeId = selfNodeIdForIdentity( &mut this.reconciler, identity);
+    if (nodeId === undefined) {
+      return;
+    }
+    const yoga = recordYoga( &mut this.records, nodeId!);
+    const native = recordNative( &mut this.records, nodeId!);
+    if (yoga === nullRaw()) {
+      return;
+    }
+    let left: f32 = 0.0;
+    let top: f32 = 0.0;
+    let width: f32 = 0.0;
+    let height: f32 = 0.0;
+    unsafe {
+      left = YGNodeLayoutGetLeft(yoga);
+      top = YGNodeLayoutGetTop(yoga);
+      width = YGNodeLayoutGetWidth(yoga);
+      height = YGNodeLayoutGetHeight(yoga);
+    }
+    const x = parentX + left;
+    const y = parentY + parentHeight - top - height;
+    let kind: i32 = 0;
+    unsafe {
+      kind =( & *(element as *mut Element)).kind();
+    }
+    if (kind !== kindWindow() && kind !== kindDialog() && kind !== kindMenu() && kind !== kindToolbar() && native !== nullRaw()) {
+      sendRect(native, "setFrame:", x as f64, y as f64, width as f64, height as f64);
+    }
+    if (kind === kindList() && native !== nullRaw()) {
+      unsafe {
+        const list = & *(element as *mut Element);
+        if (list.isVirtualized()) {
+          const document = send(native, "documentView", nullRaw());
+          if (document !== nullRaw()) {
+            let contentHeight = list.virtualItemHeight() * usizeToF32(list.virtualItemCount());
+            if (contentHeight<height) {
+              contentHeight = height;
+            }
+            sendSize(document, "setFrameSize:", width as f64, contentHeight as f64);
+          }
+        }
+      }
+    }
+    let count: usize = 0;
+    unsafe {
+      count = hostChildCount( & *(element as *mut Element));
+    }
+    let index: usize = 0;
+    while (index<count) {
+      let childPointer: *mut Element = nullElement();
+      unsafe {
+        const child = hostChildAt( & *(element as *mut Element), index);
+        if (child !== undefined) {
+          childPointer = child!as *mut Element;
+        }
+      }
+      if (childPointer !== nullElement()) {
+        if (kind === kindList()) {
+          let firstIndex: usize = 0;
+          let itemHeight: f32 = 0.0;
+          let itemCount: usize = 0;
+          unsafe {
+            const list = & *(element as *mut Element);
+            if (list.isVirtualized()) {
+              firstIndex = list.virtualFirstIndex();
+              itemHeight = list.virtualItemHeight();
+              itemCount = list.virtualItemCount();
+            }
+          }
+          if (itemHeight > 0.0f32 && itemCount > 0usize) {
+            const totalHeight = itemHeight * usizeToF32(itemCount);
+            const contentY = y + totalHeight -(itemHeight * usizeToF32(firstIndex));
+            this.applyFrames(childPointer, x, contentY, totalHeight);
+          } else {
+            this.applyFrames(childPointer, x, y, height);
+          }
+        } else {
+          this.applyFrames(childPointer, x, y, height);
+        }
+      }
+      index = index + 1usize;
+    }
+  }
+  private layout(): void {
+    const rootYoga = recordYoga( &mut this.records, 0i32);
+    if (rootYoga === nullRaw()) {
+      return;
+    }
+    let width = 480.0f32;
+    let height = 320.0f32;
+    const root = selfRootPointer( &mut this.reconciler);
+    unsafe {
+      if (root !== nullElement() &&( & *(root as *mut Element)).hasStyle()) {
+        const style =( & *(root as *mut Element)).style();
+        if (style.width > 0.0f32) {
+          width = style.width;
+        }
+        if (style.height > 0.0f32) {
+          height = style.height;
+        }
+      }
+    }
+    unsafe {
+      YGNodeCalculateLayout(rootYoga, width, height, 0i32);
+    }
+    this.applyFrames(root, 0.0f32, 0.0f32, height);
+    if (this.window !== nullRaw()) {
+      sendSize(this.window, "setContentSize:", width as f64, height as f64);
+    }
+  }
+  private closeMounted(): void {
+    this.reconciler.clearUpdateCallback();
+    this.clearNativeRecords();
+    this.reconciler.unmount();
+    this.window = nullRaw();
+    this.mounted = false;
+  }
+  public mount(root: Element): bool {
+    if (!this.start() || !this.onUIThread()) {
+      return false;
+    }
+    this.closeMounted();
+    this.reconciler.mount(move root);
+    this.buildSubtree(selfRootPointer( &mut this.reconciler), undefined);
+    this.layout();
+    if (this.window !== nullRaw()) {
+      send(this.window, "makeKeyAndOrderFront:", nullRaw());
+      sendBool(this.application, "activateIgnoringOtherApps:", true);
+    }
+    this.mounted = true;
+    return this.window !== nullRaw();
+  }
+  public mountFactory(factory: () => Element): bool {
+    const root = factory();
+    this.factory = move factory;
+    if (!this.mount(move root)) {
+      return false;
+    }
+    const rendererPointer = this.selfPointer;
+    this.reconciler.setUpdateCallback(move(): void => {
+      unsafe {
+        ( *(rendererPointer as *mut NativeRenderer)).requestRerender();
+      }
+    });
+    return true;
+  }
+  private requestRerender(): void {
+    if (!this.mounted || this.factory === undefined) {
+      return;
+    }
+    if (this.updating) {
+      this.rerenderQueued = true;
+      return;
+    }
+    if (this.onUIThread()) {
+      this.rerender();
+      return;
+    }
+    if (this.schedulerTarget === nullRaw()) {
+      return;
+    }
+    if (this.rerenderQueued) {
+      return;
+    }
+    this.rerenderQueued = true;
+    sendSelectorObjectBool(this.schedulerTarget, "performSelectorOnMainThread:withObject:waitUntilDone:", "tnuiRerender:", nullRaw(), false);
+  }
+  public rerender(): void {
+    if (!this.mounted || this.factory === undefined || this.updating) {
+      return;
+    }
+    this.rerenderQueued = false;
+    this.updating = true;
+    const root = this.factory!();
+    this.update(move root);
+    this.updating = false;
+    if (this.rerenderQueued && this.onUIThread()) {
+      this.rerender();
+    }
+  }
+  public update(root: Element): bool {
+    if (!this.mounted || !this.onUIThread()) {
+      return false;
+    }
+    this.reconciler.update(move root);
+    this.applyMutations();
+    this.layout();
+    return true;
+  }
+  public dispatchAction(identity: u64): void {
+    const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
+    if (element === nullElement()) {
+      return;
+    }
+    this.reconciler.beginBatch();
+    unsafe {
+      dispatchPress( & *(element as *mut Element));
+    }
+    this.reconciler.endBatch();
+  }
+  public dispatchTextChange(identity: u64, value: string): bool {
+    const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
+    if (element === nullElement()) {
+      return false;
+    }
+    this.reconciler.beginBatch();
+    let invoked = false;
+    unsafe {
+      invoked =( & *(element as *mut Element)).invokeTextChange(move value);
+    }
+    this.reconciler.endBatch();
+    return invoked;
+  }
+  public dispatchBooleanChange(identity: u64, value: bool): bool {
+    const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
+    if (element === nullElement()) {
+      return false;
+    }
+    this.reconciler.beginBatch();
+    let invoked = false;
+    unsafe {
+      invoked =( & *(element as *mut Element)).invokeBooleanChange(value);
+    }
+    this.reconciler.endBatch();
+    return invoked;
+  }
+  public dispatchNumericChange(identity: u64, value: f32): bool {
+    const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
+    if (element === nullElement()) {
+      return false;
+    }
+    this.reconciler.beginBatch();
+    let invoked = false;
+    unsafe {
+      invoked =( & *(element as *mut Element)).invokeNumericChange(value);
+    }
+    this.reconciler.endBatch();
+    return invoked;
+  }
+  public dispatchVisibleRangeChange(identity: u64, firstIndex: usize): bool {
+    const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
+    if (element === nullElement()) {
+      return false;
+    }
+    unsafe {
+      if (!( & *(element as *mut Element)).isVirtualized() ||( & *(element as *mut Element)).virtualFirstIndex() === firstIndex) {
+        return false;
+      }
+    }
+    this.reconciler.beginBatch();
+    let invoked = false;
+    unsafe {
+      invoked =( & *(element as *mut Element)).invokeVisibleRangeChange(firstIndex);
+    }
+    this.reconciler.endBatch();
+    return invoked;
+  }
+  public unsafe dispatchScrollChange(identity: u64, scrollView: *mut u8): void {
+    if (scrollView === nullRaw()) {
+      return;
+    }
+    const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
+    if (element === nullElement()) {
+      return;
+    }
+    unsafe {
+      const current = & *(element as *mut Element);
+      if (!current.isVirtualized() || current.virtualItemHeight() <= 0.0f32 || current.virtualItemCount() === 0usize) {
+        return;
+      }
+    }
+    const clipView = send(scrollView, "contentView", nullRaw());
+    if (clipView === nullRaw()) {
+      return;
+    }
+    const bounds = sendNativeRect(clipView, "bounds");
+    let itemHeight: f32 = 0.0;
+    let itemCount: usize = 0;
+    unsafe {
+      const current = & *(element as *mut Element);
+      itemHeight = current.virtualItemHeight();
+      itemCount = current.virtualItemCount();
+    }
+    let firstIndex = f64ToUsize(bounds.y /(itemHeight as f64));
+    if (firstIndex >= itemCount) {
+      firstIndex = itemCount - 1usize;
+    }
+    this.dispatchVisibleRangeChange(identity, firstIndex);
+  }
+  public run(): void {
+    if (this.started && this.onUIThread()) {
+      send(this.application, "run", nullRaw());
+    }
+  }
+  public stop(): void {
+    if (this.started && this.onUIThread()) {
+      send(this.application, "stop:", nullRaw());
+    }
+  }
+  public simulatePress(element: &Element): void {
+    if (element.hasMountIdentity()) {
+      this.dispatchAction(element.mountedIdentity());
+    }
+  }
+  public focus(element: &Element): bool {
+    if (this.window === nullRaw() || !this.onUIThread()) {
+      return false;
+    }
+    if (!element.hasMountIdentity()) {
+      return false;
+    }
+    const nodeId = selfNodeIdForIdentity( &mut this.reconciler, element.mountedIdentity());
+    if (nodeId === undefined) {
+      return false;
+    }
+    const native = recordNative( &mut this.records, nodeId!);
+    if (native === nullRaw()) {
+      return false;
+    }
+    const focused = send(this.window, "makeFirstResponder:", native) !== nullRaw();
+    if (focused) {
+      this.reconciler.focusElement(element);
+    }
+    return focused;
+  }
+  public isMounted(): bool {
+    return this.mounted;
+  }
+  public hasWindow(): bool {
+    return this.window !== nullRaw();
+  }
+  public unsafe windowHandle(): *mut u8 {
+    return this.window;
+  }
+  public mutationCount(): usize {
+    return this.reconciler.mutationCount();
+  }
+  public rootElement(): &Element {
+    return this.reconciler.rootElement();
+  }
+  public close(): void {
+    if (this.started && !this.onUIThread()) {
+      return;
+    }
+    this.closeMounted();
+    this.factory = undefined;
+    this.rerenderQueued = false;
+    if (this.schedulerTarget !== nullRaw()) {
+      send(this.schedulerTarget, "release", nullRaw());
+      this.schedulerTarget = nullRaw();
+    }
+    this.stop();
+    this.application = nullRaw();
+    this.started = false;
+    this.uiThread = 0u64;
+  }
+  public [Symbol.dispose](): void {
+    this.close();
+  }
+}
+function selfRootPointer(reconciler: &mut Reconciler): *mut Element {
+  unsafe {
+    return reconciler.rootElement()as *mut Element;
+  }
+}
+function selfNodeIdentity(reconciler: &mut Reconciler, nodeId: i32): u64 {
+  return reconciler.nodeIdentityValue(nodeId);
+}
+function selfNodeIdForIdentity(reconciler: &mut Reconciler, identity: u64): i32 | undefined {
+  return reconciler.nodeIdForIdentity(identity);
+}
+function dispatchNativeAction(rendererPointer: *mut u8, identity: u64): void {
+  if (rendererPointer !== nullRaw()) {
+    unsafe {
+      ( *(rendererPointer as *mut NativeRenderer)).dispatchAction(identity);
+    }
+  }
+}
+function dispatchNativeRerender(rendererPointer: *mut u8): void {
+  if (rendererPointer !== nullRaw()) {
+    unsafe {
+      ( *(rendererPointer as *mut NativeRenderer)).rerender();
+    }
+  }
+}
+function dispatchNativeTextChange(rendererPointer: *mut u8, identity: u64, value: string): void {
+  if (rendererPointer !== nullRaw()) {
+    unsafe {
+      ( *(rendererPointer as *mut NativeRenderer)).dispatchTextChange(identity, move value);
+    }
+  }
+}
+function dispatchNativeBooleanChange(rendererPointer: *mut u8, identity: u64, value: bool): void {
+  if (rendererPointer !== nullRaw()) {
+    unsafe {
+      ( *(rendererPointer as *mut NativeRenderer)).dispatchBooleanChange(identity, value);
+    }
+  }
+}
+function dispatchNativeNumericChange(rendererPointer: *mut u8, identity: u64, value: f32): void {
+  if (rendererPointer !== nullRaw()) {
+    unsafe {
+      ( *(rendererPointer as *mut NativeRenderer)).dispatchNumericChange(identity, value);
+    }
+  }
+}
+function dispatchNativeScrollChange(rendererPointer: *mut u8, identity: u64, scrollView: *mut u8): void {
+  if (rendererPointer !== nullRaw()) {
+    unsafe {
+      ( *(rendererPointer as *mut NativeRenderer)).dispatchScrollChange(identity, scrollView);
+    }
+  }
+}
+function nativeTargetCallback(receiver: *mut u8, selector: *mut u8, argument: *mut u8): void {
+  if (receiver === nullRaw()) {
+    return;
+  }
+  unsafe {
+    const actionClass = classPointer("TNUIActionTarget");
+    if (actionClass === nullRaw()) {
+      return;
+    }
+    const offset = class_getInstanceSize(actionClass);
+    const address = byteAddress(receiver as *const u8, offset as usize)as *const NativeActionContext;
+    const context = * address;
+    if (context.renderer === nullRaw()) {
+      return;
+    }
+    if (context.kind === 0i32) {
+      dispatchNativeRerender(context.renderer);
+      return;
+    }
+    if (context.kind === kindTextInput()) {
+      const object = send(argument, "object", nullRaw());
+      const valueObject = send(object, "stringValue", nullRaw());
+      const characters = send(valueObject, "UTF8String", nullRaw());
+      if (characters !== nullRaw()) {
+        const length = strlen(characters as *const u8);
+        const value = fromRaw(characters as *mut u8, length as usize);
+        dispatchNativeTextChange(context.renderer, context.identity, move value);
+      }
+      return;
+    }
+    if (context.kind === kindSwitch()) {
+      dispatchNativeBooleanChange(context.renderer, context.identity, sendBoolResult(argument, "state"));
+      return;
+    }
+    if (context.kind === kindSlider()) {
+      dispatchNativeNumericChange(context.renderer, context.identity, sendF64Result(argument, "doubleValue")as f32);
+      return;
+    }
+    if (context.kind === kindList()) {
+      const scrollView = send(argument, "object", nullRaw());
+      dispatchNativeScrollChange(context.renderer, context.identity, scrollView);
+      return;
+    }
+    dispatchNativeAction(context.renderer, context.identity);
+  }
+}
+function ensureActionClass(): *mut u8 {
+  let classPointerValue = classPointer("TNUIActionTarget");
+  if (classPointerValue === nullRaw()) {
+    const superclass = classPointer("NSObject");
+    const className = cString("TNUIActionTarget");
+    unsafe {
+      classPointerValue = objc_allocateClassPair(superclass, className as *const u8, 0 as c_size);
+      rawFree(className);
+    }
+    if (classPointerValue === nullRaw()) {
+      return nullRaw();
+    }
+    const action = select("tnuiAction:");
+    const textChange = select("controlTextDidChange:");
+    const scrollChange = select("scrollViewDidScroll:");
+    const rerender = select("tnuiRerender:");
+    const encoding = cString("v@:@");
+    unsafe {
+      class_addMethod(classPointerValue, action, nativeTargetCallback as *mut u8, encoding as *const u8);
+      class_addMethod(classPointerValue, textChange, nativeTargetCallback as *mut u8, encoding as *const u8);
+      class_addMethod(classPointerValue, scrollChange, nativeTargetCallback as *mut u8, encoding as *const u8);
+      class_addMethod(classPointerValue, rerender, nativeTargetCallback as *mut u8, encoding as *const u8);
+      rawFree(encoding);
+      objc_registerClassPair(classPointerValue);
+    }
+  }
+  return classPointerValue;
+}
+function createActionTarget(rendererPointer: *mut u8, identity: u64, kind: i32): *mut u8 {
+  const classPointerValue = ensureActionClass();
+  if (classPointerValue === nullRaw()) {
+    return nullRaw();
+  }
+  let target: *mut u8 = nullRaw();
+  unsafe {
+    target = class_createInstance(classPointerValue, sizeOf<NativeActionContext>()as c_size);
+  }
+  if (target === nullRaw()) {
+    return nullRaw();
+  }
+  unsafe {
+    const offset = class_getInstanceSize(classPointerValue);
+    const address = byteAddress(target as *const u8, offset as usize)as *mut NativeActionContext;
+    storeRaw<NativeActionContext>(address, {
+      renderer: rendererPointer, identity: identity, kind: kind,
+    });
+  }
+  return target;
+}
+function updateNativeProperties(native: *mut u8, element: &Element): void {
+  if (native === nullRaw()) {
+    return;
+  }
+  if (element.kind() === kindWindow()) {
+    const title = element.text();
+    setFoundationString(native, "setTitle:", &title);
+  } else if (element.kind() === kindText()) {
+    const text = element.text();
+    setFoundationString(native, "setStringValue:", &text);
+  } else if (element.kind() === kindButton()) {
+    const text = element.text();
+    setFoundationString(native, "setTitle:", &text);
+  } else if (element.kind() === kindTextInput()) {
+    const value = element.value();
+    const placeholder = element.placeholder();
+    if (!nativeStringEquals(native, "stringValue", &value)) {
+      setFoundationString(native, "setStringValue:", &value);
+    }
+    if (!nativeStringEquals(native, "placeholderString", &placeholder)) {
+      setFoundationString(native, "setPlaceholderString:", &placeholder);
+    }
+    if (element.hasSelection()) {
+      const start = element.selectionStart();
+      const end = element.selectionEnd();
+      if (end >= start) {
+        sendRange(native, "setSelectedRange:", start, end - start);
+      }
+    }
+  } else if (element.kind() === kindImage()) {
+    const source = element.imageSource();
+    if (source.byteLength !== 0usize) {
+      const path = foundationString( &source);
+      if (path !== nullRaw()) {
+        const image = classSend("NSImage", "imageWithContentsOfFile:", path);
+        if (image !== nullRaw()) {
+          send(native, "setImage:", image);
+        }
+      }
+    }
+  } else if (element.kind() === kindSwitch()) {
+    if (element.hasChecked()) {
+      sendU64(native, "setState:", element.isChecked()?1u64: 0u64);
+    }
+  } else if (element.kind() === kindSlider()) {
+    sendF64(native, "setMinValue:", element.minimumValue()as f64);
+    sendF64(native, "setMaxValue:", element.maximumValue()as f64);
+    if (element.hasNumericValue()) {
+      sendF64(native, "setDoubleValue:", element.numericValue()as f64);
+    }
+  } else if (element.kind() === kindProgress()) {
+    sendF64(native, "setMinValue:", element.minimumValue()as f64);
+    sendF64(native, "setMaxValue:", element.maximumValue()as f64);
+    if (element.hasNumericValue()) {
+      sendF64(native, "setDoubleValue:", element.numericValue()as f64);
+    }
+  } else if (element.kind() === kindDialog()) {
+    const title = element.text();
+    setFoundationString(native, "setTitle:", &title);
+  }
+  if (element.kind() !== kindMenu() && element.kind() !== kindToolbar()) {
+    if (element.hasAccessibilityLabel()) {
+      const label = element.accessibilityLabel();
+      setFoundationString(native, "setAccessibilityLabel:", &label);
+    } else {
+      const label = String("");
+      setFoundationString(native, "setAccessibilityLabel:", &label);
+    }
+    if (element.accessibilityRole() !== 0i32) {
+      const role = accessibilityRoleDescription(element.accessibilityRole());
+      setFoundationString(native, "setAccessibilityRoleDescription:", &role);
+    } else {
+      const role = String("");
+      setFoundationString(native, "setAccessibilityRoleDescription:", &role);
+    }
+  }
+  if (element.kind() === kindButton() || element.kind() === kindTextInput() || element.kind() === kindSwitch() || element.kind() === kindSlider()) {
+    sendBool(native, "setEnabled:", element.accessibilityEnabled());
+  }
+}
+function accessibilityRoleDescription(role: i32): string {
+  if (role === 1i32) {
+    return "window";
+  }
+  if (role === 3i32) {
+    return "static text";
+  }
+  if (role === 4i32) {
+    return "button";
+  }
+  if (role === 5i32) {
+    return "image";
+  }
+  if (role === 6i32) {
+    return "text field";
+  }
+  if (role === 7i32) {
+    return "list";
+  }
+  return "group";
 }
 function setDimension(node: *mut u8, value: f32, width: bool): void {
   unsafe {
@@ -472,439 +2021,19 @@ unsafe function applyStyle(node: *mut u8, style: &StyleSnapshot): void {
       setEdge(node, 8i32, style.padding, true);
     }
     YGNodeStyleSetGap(node, 2i32, style.gap);
-    if (style.insetTop !== 0.0f32) {
-      YGNodeStyleSetPosition(node, 1i32, style.insetTop);
-    } else {
-      YGNodeStyleSetPositionAuto(node, 1i32);
-    }
-    if (style.insetRight !== 0.0f32) {
-      YGNodeStyleSetPosition(node, 2i32, style.insetRight);
-    } else {
-      YGNodeStyleSetPositionAuto(node, 2i32);
-    }
-    if (style.insetBottom !== 0.0f32) {
-      YGNodeStyleSetPosition(node, 3i32, style.insetBottom);
-    } else {
-      YGNodeStyleSetPositionAuto(node, 3i32);
-    }
-    if (style.insetLeft !== 0.0f32) {
-      YGNodeStyleSetPosition(node, 0i32, style.insetLeft);
-    } else {
-      YGNodeStyleSetPositionAuto(node, 0i32);
-    }
     if (style.aspectRatio > 0.0f32) {
       YGNodeStyleSetAspectRatio(node, style.aspectRatio);
     }
   }
 }
-function yogaNode(element: Element): *mut u8 {
-  let node: *mut u8 = nullRaw();
-  unsafe {
-    node = YGNodeNew();
-  }
-  if (node === nullRaw()) {
-    return nullRaw();
-  }
-  if (element.hasStyle()) {
-    const style = element.styleSnapshot();
-    unsafe {
-      applyStyle(node, &style);
-    }
-  } else if (element.kind() === kindWindow()) {
-    unsafe {
-      YGNodeStyleSetWidth(node, 480.0f32);
-      YGNodeStyleSetHeight(node, 320.0f32);
-    }
-  } else if (element.kind() === kindText()) {
-    unsafe {
-      YGNodeStyleSetHeight(node, 24.0f32);
-    }
-  } else if (element.kind() === kindButton()) {
-    unsafe {
-      YGNodeStyleSetHeight(node, 32.0f32);
-    }
-  } else {
-    unsafe {
-      YGNodeStyleSetFlexDirection(node, 0i32);
-    }
-  }
-  let index: usize = 0;
-  while (index<hostChildCount(element)) {
-    const child = hostChildAt(element, index);
-    if (child !== undefined) {
-      const childNode = yogaNode(child!);
-      if (childNode !== nullRaw()) {
-        unsafe {
-          YGNodeInsertChild(node, childNode, index as c_size);
-        }
-      }
-    }
-    index = index + 1usize;
-  }
-  return node;
-}
-function applyYogaFrame(element: Element, node: *mut u8, parentX: f32, parentY: f32): void {
-  if (node === nullRaw()) {
-    return;
-  }
-  let left: f32 = 0.0;
-  let top: f32 = 0.0;
-  let width: f32 = 0.0;
-  let height: f32 = 0.0;
-  unsafe {
-    left = YGNodeLayoutGetLeft(node);
-    top = YGNodeLayoutGetTop(node);
-    width = YGNodeLayoutGetWidth(node);
-    height = YGNodeLayoutGetHeight(node);
-  }
-  const x = parentX + left;
-  const y = parentY + top;
-  if (element.hasNativeHandle()) {
-    let native: *mut u8 = nullRaw();
-    unsafe {
-      native = element.nativeHandle();
-    }
-    sendRect(native, "setFrame:", x as f64, y as f64, width as f64, height as f64);
-  }
-  let index: usize = 0;
-  while (index<hostChildCount(element)) {
-    const child = hostChildAt(element, index);
-    if (child !== undefined) {
-      let childNode: *mut u8 = nullRaw();
-      unsafe {
-        childNode = YGNodeGetChild(node, index as c_size);
-      }
-      applyYogaFrame(child!, childNode, x, y);
-    }
-    index = index + 1usize;
-  }
-}
-function releaseYogaTree(node: *mut u8): void {
-  if (node === nullRaw()) {
-    return;
-  }
-  unsafe {
-    YGNodeFreeRecursive(node);
-  }
-}
-function applyYogaLayout(element: Element): void {
-  const node = yogaNode(element);
-  if (node === nullRaw()) {
-    return;
-  }
-  unsafe {
-    YGNodeCalculateLayout(node, 480.0f32, 320.0f32, 0i32);
-  }
-  applyYogaFrame(element, node, 0.0f32, 0.0f32);
-  releaseYogaTree(node);
-}
-function releaseNativeTree(element: Element): void {
-  let index: usize = 0;
-  while (index<hostChildCount(element)) {
-    const child = hostChildAt(element, index);
-    if (child !== undefined) {
-      releaseNativeTree(child!);
-    }
-    index = index + 1usize;
-  }
-  if (element.hasNativeHandle()) {
-    let native: *mut u8 = nullRaw();
-    unsafe {
-      native = element.nativeHandle();
-    }
-    send(native, "removeFromSuperview", nullRaw());
-    send(native, "release", nullRaw());
-    unsafe {
-      element.clearNativeHandle();
-    }
-  }
-}
-function requireUIThread(thread: u64): bool {
-  if (thread === 0u64) {
-    return true;
-  }
-  return threadId() === thread;
-}
-export class NativeWindow implements Disposable {
-  private pointer: *mut u8;
-  private visible: bool;
-  public constructor(pointer: *mut u8) {
-    this.pointer = pointer;
-    this.visible = false;
-  }
-  public show(): bool {
-    if (this.pointer === nullRaw()) {
-      return false;
-    }
-    send(this.pointer, "makeKeyAndOrderFront:", nullRaw());
-    this.visible = true;
-    return true;
-  }
-  public unsafe attachContent(view: *mut u8): bool {
-    if (this.pointer === nullRaw() || view === nullRaw()) {
-      return false;
-    }
-    send(this.pointer, "setContentView:", view);
-    return true;
-  }
-  public isVisible(): bool {
-    return this.visible;
-  }
-  public unsafe rawHandle(): *mut u8 {
-    return this.pointer;
-  }
-  public unsafe takeHandle(): *mut u8 {
-    const handle = this.pointer;
-    this.pointer = nullRaw();
-    this.visible = false;
-    return handle;
-  }
-  public close(): void {
-    if (this.pointer !== nullRaw()) {
-      send(this.pointer, "orderOut:", nullRaw());
-      send(this.pointer, "release", nullRaw());
-      this.pointer = nullRaw();
-      this.visible = false;
-    }
-  }
-  public [Symbol.dispose](): void {
-    this.close();
-  }
-}
-export class NativeRenderer {
-  private application: *mut u8;
-  private window: *mut u8;
-  private root: *mut u8;
-  private loaded: bool;
-  private uiThread: u64;
-  public constructor() {
-    this.application = nullRaw();
-    this.window = nullRaw();
-    this.root = nullRaw();
-    this.loaded = false;
-    this.uiThread = 0u64;
-  }
-  public start(): bool {
-    if (this.loaded) {
-      return requireUIThread(this.uiThread);
-    }
-    this.uiThread = threadId();
-    unsafe {
-      if (!NSApplicationLoad()) {
-        return false;
-      }
-    }
-    this.application = classSend("NSApplication", "sharedApplication", nullRaw());
-    this.loaded = this.application !== nullRaw();
-    return this.loaded;
-  }
-  public createWindow(title: &str): NativeWindow | undefined {
-    if (!this.loaded && !this.start()) {
-      return undefined;
-    }
-    if (!requireUIThread(this.uiThread)) {
-      return undefined;
-    }
-    const window = classSend("NSWindow", "alloc", nullRaw());
-    if (window === nullRaw()) {
-      return undefined;
-    }
-    const initialized = send(window, "init", nullRaw());
-    if (initialized === nullRaw()) {
-      send(window, "release", nullRaw());
-      return undefined;
-    }
-    sendSize(initialized, "setContentSize:", 480.0, 320.0);
-    const titleBytes = cString(title);
-    const titleObject = classSend("NSString", "stringWithUTF8String:", titleBytes);
-    unsafe {
-      rawFree(titleBytes);
-    }
-    if (titleObject !== nullRaw()) {
-      send(initialized, "setTitle:", titleObject);
-    }
-    send(initialized, "center", nullRaw());
-    return new NativeWindow(initialized);
-  }
-  public run(): void {
-    if (this.loaded && requireUIThread(this.uiThread)) {
-      send(this.application, "run", nullRaw());
-    }
-  }
-  public stop(): void {
-    if (this.loaded && requireUIThread(this.uiThread)) {
-      send(this.application, "stop:", nullRaw());
-    }
-  }
-  public isLoaded(): bool {
-    return this.loaded;
-  }
-  public hasWindow(): bool {
-    return this.window !== nullRaw();
-  }
-  public unsafe windowHandle(): *mut u8 {
-    return this.window;
-  }
-  public mount(root: Element, title: &str): bool {
-    let rootPointer: *mut u8 = nullRaw();
-    unsafe {
-      rootPointer = root.takeRawForRuntime();
-    }
-    if (rootPointer === nullRaw()) {
-      return false;
-    }
-    let ownedRoot = leafElement();
-    unsafe {
-      ownedRoot = Element.fromRaw(rootPointer);
-    }
-    if (!this.loaded && !this.start()) {
-      unsafe {
-        disposeRaw(rootPointer);
-      }
-      return false;
-    }
-    if (!requireUIThread(this.uiThread)) {
-      unsafe {
-        disposeRaw(rootPointer);
-      }
-      return false;
-    }
-    this.closeWindow();
-    clearActionTargets();
-    const window = this.createWindow(title);
-    if (window === undefined) {
-      unsafe {
-        disposeRaw(rootPointer);
-      }
-      return false;
-    }
-    const content = nativeTree(ownedRoot);
-    if (content === nullRaw()) {
-      releaseNativeTree(ownedRoot);
-      unsafe {
-        disposeRaw(rootPointer);
-      }
-      window!.close();
-      return false;
-    }
-    applyYogaLayout(ownedRoot);
-    unsafe {
-      if (!window!.attachContent(content) || !window!.show()) {
-        releaseNativeTree(ownedRoot);
-        unsafe {
-          disposeRaw(rootPointer);
-        }
-        window!.close();
-        return false;
-      }
-    }
-    unsafe {
-      this.window = window!.takeHandle();
-      this.root = ownedRoot.takeRawForRuntime();
-    }
-    return this.window !== nullRaw();
-  }
-  public update(root: Element): bool {
-    let nextPointer: *mut u8 = nullRaw();
-    unsafe {
-      nextPointer = root.takeRawForRuntime();
-    }
-    if (nextPointer === nullRaw()) {
-      return false;
-    }
-    let next = leafElement();
-    unsafe {
-      next = Element.fromRaw(nextPointer);
-    }
-    if (!this.loaded || this.window === nullRaw() || this.root === nullRaw() || !requireUIThread(this.uiThread)) {
-      unsafe {
-        disposeRaw(nextPointer);
-      }
-      return false;
-    }
-    let previous: Element = leafElement();
-    unsafe {
-      previous = Element.fromRaw(this.root);
-    }
-    releaseNativeTree(previous);
-    unsafe {
-      disposeRaw(this.root);
-    }
-    clearActionTargets();
-    const content = nativeTree(next);
-    if (content === nullRaw()) {
-      releaseNativeTree(next);
-      clearActionTargets();
-      unsafe {
-        disposeRaw(nextPointer);
-      }
-      return false;
-    }
-    applyYogaLayout(next);
-    send(this.window, "setContentView:", content);
-    unsafe {
-      this.root = next.takeRawForRuntime();
-    }
-    return true;
-  }
-  public simulatePress(element: Element): void {
-    if (this.window !== nullRaw() && element.hasNativeHandle()) {
-      let native: *mut u8 = nullRaw();
-      unsafe {
-        native = element.nativeHandle();
-      }
-      send(native, "performClick:", native);
-      return;
-    }
-    dispatchActionSlot(element.actionSlotId());
-  }
-  public focus(element: Element): bool {
-    if (this.window === nullRaw() || !element.hasNativeHandle()) {
-      return false;
-    }
-    let native: *mut u8 = nullRaw();
-    unsafe {
-      native = element.nativeHandle();
-    }
-    const result = send(this.window, "makeFirstResponder:", native);
-    return result !== nullRaw();
-  }
-  public closeWindow(): void {
-    if (!requireUIThread(this.uiThread)) {
-      return;
-    }
-    if (this.root !== nullRaw()) {
-      let rootElement: Element = leafElement();
-      unsafe {
-        rootElement = Element.fromRaw(this.root);
-      }
-      releaseNativeTree(rootElement);
-      unsafe {
-        disposeRaw(this.root);
-      }
-      this.root = nullRaw();
-    }
-    clearActionTargets();
-    if (this.window !== nullRaw()) {
-      send(this.window, "orderOut:", nullRaw());
-      send(this.window, "close", nullRaw());
-      send(this.window, "release", nullRaw());
-      this.window = nullRaw();
-    }
-  }
-  public [Symbol.dispose](): void {
-    this.closeWindow();
-    this.stop();
-    this.application = nullRaw();
-    this.loaded = false;
-    this.uiThread = 0u64;
-  }
-}
-function leafElement(): Element {
-  unsafe {
-    return Element.fromRaw(nullRaw());
-  }
-}
 export function createNativeRenderer(): NativeRenderer {
   return new NativeRenderer();
+}
+export function runApp(factory: () => Element): i32 {
+  using renderer = new NativeRenderer();
+  if (!renderer.mountFactory(move factory)) {
+    return 1;
+  }
+  renderer.run();
+  return 0;
 }

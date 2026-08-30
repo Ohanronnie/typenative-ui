@@ -1,5 +1,5 @@
 {
-  "entry": "ownership-components.tnx",
+  "entry": "../renderer-smoke.tnx",
   "target": "aarch64-apple-darwin",
   "jsx": {
     "runtime": "../src/tnx-runtime"

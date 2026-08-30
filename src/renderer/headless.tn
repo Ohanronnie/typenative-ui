@@ -1,7 +1,6 @@
 import { Disposable } from "std/core";
-import { batch, clearHooks, flushLayoutEffects, flushPassiveEffects } from "../hooks/hooks";
-import { clearFocus, dispatchPress, Element, focusElement, hostChildAt, hostChildCount, isFocused } from "../jsx-runtime";
-import { Reconciler, renderTree } from "../reconciler/reconciler";
+import { Reconciler } from "../reconciler/reconciler";
+import { Element, dispatchPress, hostChildAt, isFocused, kindButton, kindText } from "../tnx-runtime";
 
 export class HeadlessRenderer implements Disposable {
   private reconciler: Reconciler;
@@ -9,19 +8,13 @@ export class HeadlessRenderer implements Disposable {
     this.reconciler = new Reconciler();
   }
   public mount(root: Element): void {
-    this.reconciler.mount(renderTree(move root));
-    flushLayoutEffects();
-    flushPassiveEffects();
+    this.reconciler.mount(move root);
   }
   public update(root: Element): void {
-    this.reconciler.update(renderTree(move root));
-    flushLayoutEffects();
-    flushPassiveEffects();
+    this.reconciler.update(move root);
   }
   public unmount(): void {
     this.reconciler.unmount();
-    clearFocus();
-    clearHooks();
   }
   public [Symbol.dispose](): void {
     this.unmount();
@@ -42,56 +35,167 @@ export class HeadlessRenderer implements Disposable {
   public nodeCount(): usize {
     return this.reconciler.nodeCount();
   }
-  public rootElement(): Element {
+  public rootElement(): &Element {
     return this.reconciler.rootElement();
   }
-  public simulatePress(element: Element): void {
-    batch(move(): void => {
-      dispatchPress(element);
-    });
+  public simulatePress(element: &Element): void {
+    this.reconciler.beginBatch();
+    dispatchPress(element);
+    this.reconciler.endBatch();
   }
-  public focus(element: Element): void {
-    focusElement(element);
+  public simulateTextChange(element: &Element, value: string): bool {
+    this.reconciler.beginBatch();
+    const invoked = element.invokeTextChange(move value);
+    this.reconciler.endBatch();
+    return invoked;
   }
-  public isFocused(element: Element): bool {
+  public simulateBooleanChange(element: &Element, value: bool): bool {
+    this.reconciler.beginBatch();
+    const invoked = element.invokeBooleanChange(value);
+    this.reconciler.endBatch();
+    return invoked;
+  }
+  public simulateNumericChange(element: &Element, value: f32): bool {
+    this.reconciler.beginBatch();
+    const invoked = element.invokeNumericChange(value);
+    this.reconciler.endBatch();
+    return invoked;
+  }
+  public simulateVisibleRangeChange(element: &Element, firstIndex: usize): bool {
+    if (!element.isVirtualized() || element.virtualFirstIndex() === firstIndex) {
+      return false;
+    }
+    this.reconciler.beginBatch();
+    const invoked = element.invokeVisibleRangeChange(firstIndex);
+    this.reconciler.endBatch();
+    return invoked;
+  }
+  public focus(element: &Element): void {
+    this.reconciler.focusElement(element);
+  }
+  public isFocused(element: &Element): bool {
     return isFocused(element);
   }
-  public queryFirst(kind: i32): Element | undefined {
+  public hasKind(kind: i32): bool {
     if (!this.reconciler.isMounted()) {
-      return undefined;
+      return false;
     }
-    return findFirst(this.reconciler.rootElement(), kind);
+    return containsKind(this.reconciler.rootElement(), kind);
   }
-  public accessibilityRole(element: Element): i32 {
+  public textLengthFirst(kind: i32): usize {
+    if (!this.reconciler.isMounted()) {
+      return 0;
+    }
+    return firstTextLength(this.reconciler.rootElement(), kind);
+  }
+  public simulatePressFirst(kind: i32): void {
+    if (this.reconciler.isMounted()) {
+      this.reconciler.beginBatch();
+      invokeFirst(this.reconciler.rootElement(), kind);
+      this.reconciler.endBatch();
+    }
+  }
+  public focusFirst(kind: i32): void {
+    if (this.reconciler.isMounted()) {
+      this.reconciler.focusFirst(kind);
+    }
+  }
+  public isFocusedFirst(kind: i32): bool {
+    if (!this.reconciler.isMounted()) {
+      return false;
+    }
+    return findFocused(this.reconciler.rootElement(), kind);
+  }
+  public accessibilityRole(element: &Element): i32 {
     if (element.kind() === 5i32) {
       return 1;
     }
-    if (element.kind() === 4i32) {
+    if (element.kind() === kindButton()) {
       return 4;
     }
-    if (element.kind() === 3i32) {
+    if (element.kind() === kindText()) {
       return 3;
     }
     return 2;
   }
-  public accessibilityLabelLength(element: Element): usize {
+  public accessibilityLabelLength(element: &Element): usize {
     return element.textLength();
   }
+  public hookComponentCount(): usize {
+    return this.reconciler.hookComponentCount();
+  }
+  public duplicateKeyCount(): usize {
+    return this.reconciler.duplicateKeyCount();
+  }
+  public hasDiagnostics(): bool {
+    return this.reconciler.hasDiagnostics();
+  }
+  public setUpdateCallback(callback: () => void): void {
+    this.reconciler.setUpdateCallback(move callback);
+  }
+  public clearUpdateCallback(): void {
+    this.reconciler.clearUpdateCallback();
+  }
 }
-function findFirst(element: Element, kind: i32): Element | undefined {
+function containsKind(element: &Element, kind: i32): bool {
   if (element.kind() === kind) {
-    return element;
+    return true;
   }
   let index: usize = 0;
-  while (index<hostChildCount(element)) {
+  while (index<element.childCount()) {
     const child = hostChildAt(element, index);
     if (child !== undefined) {
-      const found = findFirst(child!, kind);
-      if (found !== undefined) {
-        return found;
+      if (containsKind(child!, kind)) {
+        return true;
       }
     }
     index = index + 1usize;
   }
-  return undefined;
+  return false;
+}
+function firstTextLength(element: &Element, kind: i32): usize {
+  if (element.kind() === kind) {
+    return element.textLength();
+  }
+  let index: usize = 0;
+  while (index<element.childCount()) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined) {
+      const length = firstTextLength(child!, kind);
+      if (length !== 0usize) {
+        return length;
+      }
+    }
+    index = index + 1usize;
+  }
+  return 0;
+}
+function invokeFirst(element: &Element, kind: i32): bool {
+  if (element.kind() === kind) {
+    dispatchPress(element);
+    return true;
+  }
+  let index: usize = 0;
+  while (index<element.childCount()) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined && invokeFirst(child!, kind)) {
+      return true;
+    }
+    index = index + 1usize;
+  }
+  return false;
+}
+function findFocused(element: &Element, kind: i32): bool {
+  if (element.kind() === kind) {
+    return element.isFocused();
+  }
+  let index: usize = 0;
+  while (index<element.childCount()) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined && findFocused(child!, kind)) {
+      return true;
+    }
+    index = index + 1usize;
+  }
+  return false;
 }

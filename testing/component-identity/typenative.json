@@ -2,6 +2,6 @@
   "entry": "../component-identity.tnx",
   "target": "aarch64-apple-darwin",
   "jsx": {
-    "runtime": "../src/jsx-runtime"
+    "runtime": "../src/tnx-runtime"
   }
 }

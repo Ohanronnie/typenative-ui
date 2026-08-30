@@ -1,7 +1,7 @@
 import { View } from "../src/components";
 import { EmptyProps } from "../src/core/types";
-import { createText, Element, hostChildAt } from "../src/jsx-runtime";
-import { renderTree } from "../src/reconciler/reconciler";
+import { HeadlessRenderer } from "../src/renderer/headless";
+import { createText, Element, hostChildAt } from "../src/tnx-runtime";
 
 function A(props: EmptyProps): Element {
   return createText("a");
@@ -15,14 +15,16 @@ function Root(props: EmptyProps): Element {
   </View>;
 }
 function main(): i32 {
-  const rendered = renderTree(<Root />);
+  using renderer = new HeadlessRenderer();
+  renderer.mount(<Root />);
+  const rendered = renderer.rootElement();
   const count = rendered.childCount();
   const child = hostChildAt(rendered, 0usize);
   let nestedCount = 0usize;
   if (child !== undefined) {
     nestedCount = child!.childCount();
   }
-  rendered.dispose();
+  renderer.unmount();
   if (count !== 1usize) {
     return 10;
   }

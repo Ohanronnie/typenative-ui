@@ -1,0 +1,60 @@
+import { Button, Canvas, Dialog, Grid, Image, List, Menu, Progress, ScrollView, Slider, SplitView, Stack, Switch, Text, TextInput, Toolbar, View, Window } from "../src/components";
+import { NativeRenderer } from "../src/platform/macos";
+import { Element, createText } from "../src/tnx-runtime";
+
+function noop(): void {
+}
+function noopText(value: string): void {
+}
+function noopBoolean(value: bool): void {
+}
+function noopNumeric(value: f32): void {
+}
+function noopRange(firstIndex: usize): void {
+}
+function renderItem(index: usize): Element {
+  return createText("Row");
+}
+struct EmptyProps {
+}
+function NativeComponents(props: EmptyProps): Element {
+  return <Window title="TypeNative Components">
+    <View>
+      <Text accessibilityLabel="Greeting">Hello</Text>
+      <Button onPress={noop}>Button</Button>
+      <TextInput placeholder="Name" onChange={noopText} /><Image source="" alt="Image" /><ScrollView>
+        <Text>Scroll</Text>
+      </ScrollView>
+      <List itemCount={20usize} renderItem={renderItem} itemHeight={24.0f32} visibleItemCount={3usize} overscan={1usize} onVisibleRangeChange={noopRange} /><Switch value={true} onChange={noopBoolean} /><Slider value={0.5f32} minimumValue={0.0f32} maximumValue={1.0f32} onChange={noopNumeric} /><Progress value={0.5f32} minimumValue={0.0f32} maximumValue={1.0f32} /><Menu title="File" /><Toolbar>
+        <Text>Toolbar</Text>
+      </Toolbar>
+      <Dialog title="Dialog">
+        <Text>Dialog body</Text>
+      </Dialog>
+      <SplitView>
+        <Text>Split</Text>
+      </SplitView>
+      <Stack>
+        <Text>Stack</Text>
+      </Stack>
+      <Grid>
+        <Text>Grid</Text>
+      </Grid>
+      <Canvas>
+        <Text>Canvas</Text>
+      </Canvas>
+    </View>
+  </Window>;
+}
+function main(): i32 {
+  using renderer = new NativeRenderer();
+  if (!renderer.mount(<NativeComponents />)) {
+    return 1;
+  }
+  if (!renderer.isMounted() || !renderer.hasWindow()) {
+    renderer.close();
+    return 2;
+  }
+  renderer.close();
+  return 0;
+}

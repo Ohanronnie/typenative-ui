@@ -1,236 +1,512 @@
-import { nullPointer, rawAlloc, rawFree, u64ToUsize } from "std/alloc";
 import { Array } from "std/collections";
 import { Disposable } from "std/core";
-import { c_size } from "std/ffi";
-import { beginHookPass, finishHookPass } from "../hooks/hooks";
-import { disposeRaw, Element, hostChildAt, hostChildCount, hostSetChild, kindFunction, leaf } from "../jsx-runtime";
+import { beginBatchFor, beginComponent, beginHookPassFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor } from "../hooks/hooks";
+import { Element, hostChildAt, hostChildCount, hostSetChild, kindFunction, kindImage, kindProgress, kindSlider, kindSwitch, kindTextInput, leaf, StyleSnapshot } from "../tnx-runtime";
 import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "./mutations";
 
-declare extern "C" {
-  function tn_bytes_read_u8(bytes: *const u8, length: c_size, index: c_size, value: *mut u8): i32;
-  function tn_bytes_write_u8(bytes: *mut u8, length: c_size, index: c_size, value: u8): i32;
-  function tn_bytes_copy_at(source: *const u8, length: c_size, offset: c_size, count: c_size, destination: *mut u8): i32;
-  function tn_bytes_copy_to_at(source: *const u8, sourceLength: c_size, sourceOffset: c_size, count: c_size, destination: *mut u8, destinationLength: c_size, destinationOffset: c_size): i32;
+struct MountedNode {
+  public id: i32;
+  public identity: u64;
+  public active: bool;
+  public kind: i32;
+  public typeId: u64;
+  public children: Array<i32>;
 }
-function nullRaw(): *mut u8 {
-  unsafe {
-    return nullPointer<u8>();
-  }
+function parentNode(id: i32): i32 | undefined {
+  return id;
 }
-struct KeyIndex {
-  public keys: *mut u8;
-  public values: *mut u8;
-  public states: *mut u8;
-  public capacity: usize;
-  public mask: usize;
-}
-function emptyKeyIndex(): KeyIndex {
+function newMountedNode(id: i32, identity: u64, element: &Element): MountedNode {
   return {
-    keys: nullRaw(), values: nullRaw(), states: nullRaw(), capacity: 0usize, mask: 0usize,
+    id: id, identity: identity, active: true, kind: element.kind(), typeId: element.typeId(), children: new Array<i32>({
+      capacity: 0usize
+    }),
   };
 }
-function newKeyIndex(minimum: usize): KeyIndex {
-  let capacity = 8usize;
-  while (capacity<minimum) {
-    capacity = capacity * 2usize;
+function sameElement(previous: &Element, next: &Element): bool {
+  if (previous.kind() !== next.kind() || previous.typeId() !== next.typeId() || !previous.keyEquals(next)) {
+    return false;
   }
-  let keys: *mut u8 = nullRaw();
-  let values: *mut u8 = nullRaw();
-  let states: *mut u8 = nullRaw();
-  unsafe {
-    keys = rawAlloc(capacity * 8usize);
-    values = rawAlloc(capacity * 8usize);
-    states = rawAlloc(capacity);
-    let index: usize = 0;
-    while (index<capacity) {
-      tn_bytes_write_u8(states, capacity as c_size, index as c_size, 0u8);
-      index = index + 1usize;
+  if (previous.isComponent() || next.isComponent()) {
+    return previous.sameComponent(next);
+  }
+  return true;
+}
+function sameStyle(left: &StyleSnapshot, right: &StyleSnapshot): bool {
+  return left.width === right.width && left.height === right.height && left.minWidth === right.minWidth && left.minHeight === right.minHeight && left.maxWidth === right.maxWidth && left.maxHeight === right.maxHeight && left.margin === right.margin && left.padding === right.padding && left.marginTop === right.marginTop && left.marginRight === right.marginRight && left.marginBottom === right.marginBottom && left.marginLeft === right.marginLeft && left.paddingTop === right.paddingTop && left.paddingRight === right.paddingRight && left.paddingBottom === right.paddingBottom && left.paddingLeft === right.paddingLeft && left.gap === right.gap && left.flex === right.flex && left.flexGrow === right.flexGrow && left.flexShrink === right.flexShrink && left.flexBasis === right.flexBasis && left.flexDirection === right.flexDirection && left.alignItems === right.alignItems && left.alignSelf === right.alignSelf && left.justifyContent === right.justifyContent && left.positionType === right.positionType && left.insetTop === right.insetTop && left.insetRight === right.insetRight && left.insetBottom === right.insetBottom && left.insetLeft === right.insetLeft && left.display === right.display && left.overflow === right.overflow && left.aspectRatio === right.aspectRatio && left.hasMarginEdges === right.hasMarginEdges && left.hasPaddingEdges === right.hasPaddingEdges;
+}
+function elementChanged(previous: &Element, next: &Element): bool {
+  if (!previous.textEquals(next) || previous.hasStyle() !== next.hasStyle() ||(previous.hasStyle() && !sameStyle( &previous.style(), &next.style())) || previous.accessibilityRole() !== next.accessibilityRole() || previous.accessibilityEnabled() !== next.accessibilityEnabled() || !previous.accessibilityLabelEquals(next) || previous.selected() !== next.selected()) {
+    return true;
+  }
+  if (previous.kind() === kindTextInput() &&(!previous.valueEquals(next) || !previous.placeholderEquals(next) || previous.hasSelection() !== next.hasSelection() ||(previous.hasSelection() &&(previous.selectionStart() !== next.selectionStart() || previous.selectionEnd() !== next.selectionEnd())))) {
+    return true;
+  }
+  if (previous.kind() === kindImage() && !previous.imageSourceEquals(next)) {
+    return true;
+  }
+  if (previous.kind() === kindSwitch() &&(previous.hasChecked() !== next.hasChecked() ||(previous.hasChecked() && previous.checked() !== next.checked()))) {
+    return true;
+  }
+  if ((previous.kind() === kindSlider() || previous.kind() === kindProgress()) &&(previous.hasNumericValue() !== next.hasNumericValue() ||(previous.hasNumericValue() && previous.numericValue() !== next.numericValue()) || previous.minimumValue() !== next.minimumValue() || previous.maximumValue() !== next.maximumValue())) {
+    return true;
+  }
+  return false;
+}
+function nodeAt(nodes: &Array<MountedNode>, id: i32): &MountedNode | undefined {
+  let index: usize = 0;
+  while (index<nodes.length) {
+    const node = nodes.at(index);
+    if (node !== undefined && node!.id === id) {
+      return node;
     }
-  }
-  return {
-    keys: keys, values: values, states: states, capacity: capacity, mask: capacity - 1usize,
-  };
-}
-function keyIndexHash(key: u64): usize {
-  const mixed = key ^(key / 4294967296u64);
-  return u64ToUsize(mixed);
-}
-function keyIndexState(table: &KeyIndex, index: usize): u8 {
-  let state = 0u8;
-  unsafe {
-    tn_bytes_read_u8(table.states as *const u8, table.capacity as c_size, index as c_size,( &mut state)as *mut u8);
-  }
-  return state;
-}
-function keyIndexKey(table: &KeyIndex, index: usize): u64 {
-  let key = 0u64;
-  unsafe {
-    tn_bytes_copy_at(table.keys as *const u8, table.capacity * 8usize as c_size, index * 8usize as c_size, 8 as c_size,( &mut key)as *mut u8);
-  }
-  return key;
-}
-function keyIndexValue(table: &KeyIndex, index: usize): usize {
-  let value = 0usize;
-  unsafe {
-    tn_bytes_copy_at(table.values as *const u8, table.capacity * 8usize as c_size, index * 8usize as c_size, 8 as c_size,( &mut value)as *mut u8);
-  }
-  return value;
-}
-function keyIndexSlot(table: &KeyIndex, key: u64): usize {
-  if (table.capacity === 0usize) {
-    return table.capacity;
-  }
-  let index = keyIndexHash(key) & table.mask;
-  let probes = 0usize;
-  while (probes<table.capacity) {
-    const state = keyIndexState(table, index);
-    if (state === 0u8 || keyIndexKey(table, index) === key) {
-      return index;
-    }
-    index =(index + 1usize) & table.mask;
-    probes = probes + 1usize;
-  }
-  return table.capacity;
-}
-function keyIndexInsert(table: &mut KeyIndex, key: u64, value: usize): void {
-  const index = keyIndexSlot(table, key);
-  if (index === table.capacity) {
-    return;
-  }
-  unsafe {
-    const keyValue = key;
-    const indexValue = value;
-    tn_bytes_copy_to_at(( &keyValue)as *const u8, 8 as c_size, 0, 8 as c_size, table.keys,(table.capacity * 8usize)as c_size,(index * 8usize)as c_size);
-    tn_bytes_copy_to_at(( &indexValue)as *const u8, 8 as c_size, 0, 8 as c_size, table.values,(table.capacity * 8usize)as c_size,(index * 8usize)as c_size);
-    tn_bytes_write_u8(table.states, table.capacity as c_size, index as c_size, 1u8);
-  }
-}
-function keyIndexGet(table: &KeyIndex, key: u64): usize | undefined {
-  if (table.capacity === 0usize) {
-    return undefined;
-  }
-  let index = keyIndexHash(key) & table.mask;
-  let probes = 0usize;
-  while (probes<table.capacity) {
-    const state = keyIndexState(table, index);
-    if (state === 0u8) {
-      return undefined;
-    }
-    if (keyIndexKey(table, index) === key) {
-      return keyIndexValue(table, index);
-    }
-    index =(index + 1usize) & table.mask;
-    probes = probes + 1usize;
+    index = index + 1usize;
   }
   return undefined;
 }
-function disposeKeyIndex(table: &mut KeyIndex): void {
-  if (table.capacity > 0usize) {
-    unsafe {
-      rawFree(table.keys);
-      rawFree(table.values);
-      rawFree(table.states);
+function nodeAtMut(nodes: &mut Array<MountedNode>, id: i32): &mut MountedNode | undefined {
+  let index: usize = 0;
+  while (index<nodes.length) {
+    const node = nodes.atMut(index);
+    if (node !== undefined && node!.id === id) {
+      return node;
     }
+    index = index + 1usize;
   }
-  table.keys = nullRaw();
-  table.values = nullRaw();
-  table.states = nullRaw();
-  table.capacity = 0usize;
-  table.mask = 0usize;
+  return undefined;
+}
+function nodeIdentity(nodes: &Array<MountedNode>, id: i32): u64 | undefined {
+  const node = nodeAt(nodes, id);
+  if (node === undefined) {
+    return undefined;
+  }
+  return node!.identity;
+}
+function nodeChildId(nodes: &Array<MountedNode>, id: i32, index: usize): i32 | undefined {
+  const node = nodeAt(nodes, id);
+  if (node === undefined) {
+    return undefined;
+  }
+  const value = node!.children.at(index);
+  if (value === undefined) {
+    return undefined;
+  }
+  unsafe {
+    return *(value!);
+  }
+}
+function usedAt(values: &Array<u8>, index: usize): bool {
+  const value = values.at(index);
+  if (value === undefined) {
+    return false;
+  }
+  unsafe {
+    return *(value!) !== 0u8;
+  }
+}
+function detachReferences(element: &Element): void {
+  element.detachReference();
+  let index: usize = 0;
+  while (index<hostChildCount(element)) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined) {
+      detachReferences(child!);
+    }
+    index = index + 1usize;
+  }
+}
+function setFocusedInTree(element: &Element, identity: u64): bool {
+  const elementIdentity = element.mountedId();
+  const matched = elementIdentity !== undefined && elementIdentity! === identity;
+  element.setFocused(matched);
+  let found = matched;
+  let index: usize = 0;
+  while (index<hostChildCount(element)) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined && setFocusedInTree(child!, identity)) {
+      found = true;
+    }
+    index = index + 1usize;
+  }
+  return found;
+}
+function duplicateKeyCountInTree(element: &Element): usize {
+  let count: usize = 0;
+  let left: usize = 0;
+  while (left<hostChildCount(element)) {
+    const leftChild = hostChildAt(element, left);
+    if (leftChild !== undefined && leftChild!.keyIsPresent()) {
+      let right: usize = left + 1usize;
+      while (right<hostChildCount(element)) {
+        const rightChild = hostChildAt(element, right);
+        if (rightChild !== undefined && rightChild!.keyIsPresent() && leftChild!.keyEquals(rightChild!)) {
+          count = count + 1usize;
+          break;
+        }
+        right = right + 1usize;
+      }
+    }
+    left = left + 1usize;
+  }
+  let childIndex: usize = 0;
+  while (childIndex<hostChildCount(element)) {
+    const child = hostChildAt(element, childIndex);
+    if (child !== undefined) {
+      count = count + duplicateKeyCountInTree(child!);
+    }
+    childIndex = childIndex + 1usize;
+  }
+  return count;
+}
+function firstIdentityOfKind(element: &Element, kind: i32): u64 | undefined {
+  if (element.kind() === kind) {
+    return element.mountedId();
+  }
+  let index: usize = 0;
+  while (index<hostChildCount(element)) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined) {
+      const identity = firstIdentityOfKind(child!, kind);
+      if (identity !== undefined) {
+        return identity;
+      }
+    }
+    index = index + 1usize;
+  }
+  return undefined;
+}
+function deactivateSubtree(nodes: &mut Array<MountedNode>, id: i32): void {
+  let childIndex: usize = 0;
+  while (true) {
+    const child = nodeChildId(nodes, id, childIndex);
+    if (child === undefined) {
+      break;
+    }
+    deactivateSubtree(nodes, child!);
+    childIndex = childIndex + 1usize;
+  }
+  const node = nodeAtMut(nodes, id);
+  if (node !== undefined) {
+    node!.active = false;
+    node!.children.clear();
+  }
+}
+function findOldChild(previous: &Element, next: &Element, used: &Array<u8>, nextIndex: usize, oldCount: usize): usize | undefined {
+  if (!next.keyIsPresent()) {
+    if (nextIndex >= oldCount) {
+      return undefined;
+    }
+    const candidate = previous.childAt(nextIndex);
+    if (candidate !== undefined && !usedAt(used, nextIndex) && !candidate!.keyIsPresent()) {
+      return nextIndex;
+    }
+    return undefined;
+  }
+  let index: usize = 0;
+  while (index<oldCount) {
+    const candidate = previous.childAt(index);
+    if (candidate !== undefined && !usedAt(used, index) && candidate!.keyEquals(next)) {
+      return index;
+    }
+    index = index + 1usize;
+  }
+  return undefined;
+}
+function resolveElement(element: Element, position: usize): Element {
+  if (element.kind() === kindFunction()) {
+    const componentKey = element.key();
+    const identity = element.componentId();
+    const key = element.key();
+    beginComponent(move identity, move key, position);
+    const rendered = element.render();
+    let resolved = resolveElement(move rendered, 0usize);
+    if (componentKey.kind !== 0i32) {
+      resolved.setKeyIfAbsent(move componentKey);
+    }
+    endComponent();
+    return move resolved;
+  }
+  let current = move element;
+  let index: usize = 0;
+  while (index<current.childCount()) {
+    const child = current.takeChild(index);
+    if (child !== undefined) {
+      const resolved = resolveElement(move child!, index);
+      hostSetChild( &mut current, index, move resolved);
+    }
+    index = index + 1usize;
+  }
+  return move current;
 }
 export class Reconciler implements Disposable {
-  private root: *mut u8;
+  private root: Element;
   private mounted: bool;
   private nextId: i32;
-  private nodes: Array<i32>;
+  private nextIdentity: u64;
+  private treeGeneration: u64;
+  private nodes: Array<MountedNode>;
   private mutations: Array<Mutation>;
+  private hooks: HookRoot;
+  private focusedIdentity: u64 | undefined;
+  private duplicateKeyErrors: usize;
   public constructor() {
-    unsafe {
-      this.root = nullRaw();
-    }
+    this.root = leaf();
     this.mounted = false;
     this.nextId = 0i32;
-    this.nodes = new Array<i32>({
-      capacity: 0
+    this.nextIdentity = 1u64;
+    this.treeGeneration = 0u64;
+    this.nodes = new Array<MountedNode>({
+      capacity: 0usize
     });
     this.mutations = new Array<Mutation>({
-      capacity: 0
+      capacity: 0usize
     });
+    this.hooks = new HookRoot();
+    this.focusedIdentity = undefined;
+    this.duplicateKeyErrors = 0usize;
+  }
+  private allocateNode(element: &Element): i32 {
+    let index: usize = 0;
+    while (index<this.nodes.length) {
+      const existing = this.nodes.atMut(index);
+      if (existing !== undefined && !existing!.active) {
+        const identity = this.nextIdentity;
+        this.nextIdentity = this.nextIdentity + 1u64;
+        existing!.active = true;
+        existing!.identity = identity;
+        existing!.kind = element.kind();
+        existing!.typeId = element.typeId();
+        existing!.children.clear();
+        return existing!.id;
+      }
+      index = index + 1usize;
+    }
+    const id = this.nextId;
+    this.nextId = this.nextId + 1i32;
+    const identity = this.nextIdentity;
+    this.nextIdentity = this.nextIdentity + 1u64;
+    this.nodes.push(newMountedNode(id, identity, element));
+    return id;
+  }
+  private appendChild(parent: i32, child: i32): void {
+    const node = nodeAtMut( &mut this.nodes, parent);
+    if (node !== undefined) {
+      node!.children.push(child);
+    }
+  }
+  private snapshot(element: &Element, parent: i32 | undefined, index: usize, emit: bool): i32 {
+    const id = this.allocateNode(element);
+    const identity = nodeIdentity( &this.nodes, id);
+    if (identity === undefined) {
+      return id;
+    }
+    element.setMountIdentity(identity!, this.treeGeneration);
+    element.attachReference(identity!, this.treeGeneration);
+    if (emit) {
+      this.mutations.push({
+        kind: mutationCreate(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
+      });
+    }
+    let childIndex: usize = 0;
+    while (childIndex<hostChildCount(element)) {
+      const child = hostChildAt(element, childIndex);
+      if (child !== undefined) {
+        const childId = this.snapshot(child!, parentNode(id), childIndex, emit);
+        this.appendChild(id, childId);
+      }
+      childIndex = childIndex + 1usize;
+    }
+    return id;
+  }
+  private replaceSubtree(id: i32, element: &Element, parent: i32 | undefined, index: usize): void {
+    const identity = nodeIdentity( &this.nodes, id);
+    if (identity === undefined) {
+      return;
+    }
+    element.setMountIdentity(identity!, this.treeGeneration);
+    element.attachReference(identity!, this.treeGeneration);
+    let childIndex: usize = 0;
+    while (true) {
+      const child = nodeChildId( &this.nodes, id, childIndex);
+      if (child === undefined) {
+        break;
+      }
+      deactivateSubtree( &mut this.nodes, child!);
+      childIndex = childIndex + 1usize;
+    }
+    const node = nodeAtMut( &mut this.nodes, id);
+    if (node !== undefined) {
+      node!.active = true;
+      node!.kind = element.kind();
+      node!.typeId = element.typeId();
+      node!.children.clear();
+    }
+    let nextIndex: usize = 0;
+    while (nextIndex<hostChildCount(element)) {
+      const child = hostChildAt(element, nextIndex);
+      if (child !== undefined) {
+        const childId = this.snapshot(child!, parentNode(id), nextIndex, true);
+        this.appendChild(id, childId);
+      }
+      nextIndex = nextIndex + 1usize;
+    }
+  }
+  private diffNode(previous: &Element, next: &Element, id: i32, parent: i32 | undefined, index: usize): void {
+    if (!previous.referenceEquals(next)) {
+      previous.detachReference();
+    }
+    const identity = nodeIdentity( &this.nodes, id);
+    if (identity === undefined) {
+      return;
+    }
+    next.setMountIdentity(identity!, this.treeGeneration);
+    next.attachReference(identity!, this.treeGeneration);
+    if (!sameElement(previous, next)) {
+      detachReferences(previous);
+      this.mutations.push({
+        kind: mutationReplace(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
+      });
+      this.replaceSubtree(id, next, parent, index);
+      return;
+    }
+    if (elementChanged(previous, next)) {
+      this.mutations.push({
+        kind: mutationUpdate(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
+      });
+      const node = nodeAtMut( &mut this.nodes, id);
+      if (node !== undefined) {
+        node!.kind = next.kind();
+        node!.typeId = next.typeId();
+      }
+    }
+    const oldCount = hostChildCount(previous);
+    const nextCount = hostChildCount(next);
+    const used = new Array<u8>({
+      capacity: oldCount
+    });
+    let usedIndex: usize = 0;
+    while (usedIndex<oldCount) {
+      used.push(0u8);
+      usedIndex = usedIndex + 1usize;
+    }
+    const newChildren = new Array<i32>({
+      capacity: nextCount
+    });
+    let nextIndex: usize = 0;
+    while (nextIndex<nextCount) {
+      const nextChild = hostChildAt(next, nextIndex);
+      if (nextChild !== undefined) {
+        const oldIndex = findOldChild(previous, nextChild!, &used, nextIndex, oldCount);
+        if (oldIndex === undefined) {
+          const childId = this.snapshot(nextChild!, parentNode(id), nextIndex, false);
+          this.mutations.push({
+            kind: mutationInsert(), nodeId: childId, parentId: parentNode(id), fromIndex: nextIndex, toIndex: nextIndex,
+          });
+          newChildren.push(childId);
+        } else {
+          const previousIndex = oldIndex!;
+          used.set(previousIndex, 1u8);
+          const childId = nodeChildId( &this.nodes, id, previousIndex);
+          const previousChild = hostChildAt(previous, previousIndex);
+          if (childId !== undefined && previousChild !== undefined) {
+            if (previousIndex !== nextIndex && nextChild!.keyIsPresent()) {
+              this.mutations.push({
+                kind: mutationMove(), nodeId: childId!, parentId: parentNode(id), fromIndex: previousIndex, toIndex: nextIndex,
+              });
+            }
+            this.diffNode(previousChild!, nextChild!, childId!, parentNode(id), nextIndex);
+            newChildren.push(childId!);
+          }
+        }
+      }
+      nextIndex = nextIndex + 1usize;
+    }
+    let previousIndex: usize = 0;
+    while (previousIndex<oldCount) {
+      const marker = used.at(previousIndex);
+      if (previousIndex >= nextCount ||(marker !== undefined && !usedAt( &used, previousIndex))) {
+        const childId = nodeChildId( &this.nodes, id, previousIndex);
+        const previousChild = hostChildAt(previous, previousIndex);
+        if (previousChild !== undefined) {
+          detachReferences(previousChild!);
+        }
+        if (childId !== undefined) {
+          this.mutations.push({
+            kind: mutationRemove(), nodeId: childId!, parentId: parentNode(id), fromIndex: previousIndex, toIndex: 0usize,
+          });
+          deactivateSubtree( &mut this.nodes, childId!);
+        }
+      }
+      previousIndex = previousIndex + 1usize;
+    }
+    const node = nodeAtMut( &mut this.nodes, id);
+    if (node !== undefined) {
+      node!.children.clear();
+      let newIndex: usize = 0;
+      while (newIndex<newChildren.length) {
+        const childId = newChildren.at(newIndex);
+        if (childId !== undefined) {
+          unsafe {
+            node!.children.push( *(childId!));
+          }
+        }
+        newIndex = newIndex + 1usize;
+      }
+    }
+  }
+  private render(element: Element): Element {
+    beginHookPassFor( &mut this.hooks);
+    const resolved = resolveElement(move element, 0usize);
+    finishHookPassFor( &mut this.hooks);
+    return move resolved;
   }
   public mount(element: Element): void {
-    let pointer: *mut u8 = nullRaw();
-    unsafe {
-      pointer = element.takeRawForRuntime();
-    }
-    if (pointer === nullRaw()) {
-      this.unmount();
-      return;
-    }
-    if (this.mounted) {
-      this.unmount();
-    }
-    unsafe {
-      this.root = pointer;
-    }
+    this.unmount();
+    this.mutations.clear();
+    this.nodes.clear();
+    this.nextId = 0i32;
+    this.treeGeneration = this.treeGeneration + 1u64;
+    this.root = this.render(move element);
+    this.duplicateKeyErrors = duplicateKeyCountInTree( &this.root);
     this.mounted = true;
-    this.resetSnapshot();
-    unsafe {
-      this.snapshot(Element.fromRaw(pointer), - 1i32, 0usize, true);
-    }
+    this.snapshot( &this.root, undefined, 0usize, true);
+    flushLayoutEffectsFor( &mut this.hooks);
+    flushPassiveEffectsFor( &mut this.hooks);
   }
   public update(element: Element): void {
-    let nextPointer: *mut u8 = nullRaw();
-    unsafe {
-      nextPointer = element.takeRawForRuntime();
-    }
-    if (nextPointer === nullRaw()) {
-      return;
-    }
     if (!this.mounted) {
-      unsafe {
-        this.root = nextPointer;
-      }
-      this.mounted = true;
-      this.resetSnapshot();
-      unsafe {
-        this.snapshot(Element.fromRaw(nextPointer), - 1i32, 0usize, true);
-      }
+      this.mount(move element);
       return;
     }
-    unsafe {
-      const previous = Element.fromRaw(this.root);
-      const next = Element.fromRaw(nextPointer);
-      this.mutations.clear();
-      diffTree(previous, next, 0i32, - 1i32, 0usize, &mut this.mutations);
-      disposeRaw(this.root);
-      this.root = nextPointer;
-      this.nodes.clear();
-      this.nextId = 0i32;
-      this.snapshot(next, - 1i32, 0usize, false);
+    this.treeGeneration = this.treeGeneration + 1u64;
+    const next = this.render(move element);
+    this.mutations.clear();
+    this.duplicateKeyErrors = duplicateKeyCountInTree( &next);
+    this.diffNode( &this.root, &next, 0i32, undefined, 0usize);
+    this.root = move next;
+    if (this.focusedIdentity !== undefined && !setFocusedInTree( &this.root, this.focusedIdentity!)) {
+      this.focusedIdentity = undefined;
     }
+    flushLayoutEffectsFor( &mut this.hooks);
+    flushPassiveEffectsFor( &mut this.hooks);
   }
   public unmount(): void {
-    if (this.root !== nullRaw()) {
-      unsafe {
-        disposeRaw(this.root);
-        this.root = nullRaw();
-      }
+    if (this.mounted) {
+      detachReferences( &this.root);
+      this.root.dispose();
     }
+    this.root = leaf();
+    this.focusedIdentity = undefined;
     this.mounted = false;
     this.nodes.clear();
     this.mutations.clear();
     this.nextId = 0i32;
+    clearHooksFor( &mut this.hooks);
   }
   public [Symbol.dispose](): void {
     this.unmount();
   }
-  public rootElement(): Element {
-    if (!this.mounted) {
-      return leaf();
-    }
-    unsafe {
-      return Element.fromRaw(this.root);
-    }
+  public rootElement(): &Element {
+    return &this.root;
   }
   public mutationCount(): usize {
     return this.mutations.length;
@@ -258,154 +534,86 @@ export class Reconciler implements Disposable {
     return this.mounted;
   }
   public nodeCount(): usize {
-    return this.nodes.length;
-  }
-  private resetSnapshot(): void {
-    this.nodes.clear();
-    this.mutations.clear();
-    this.nextId = 0i32;
-  }
-  private snapshot(element: Element, parent: i32, index: usize, emit: bool): i32 {
-    const id = this.nextId;
-    this.nextId = this.nextId + 1i32;
-    this.nodes.push(id);
-    if (emit) {
-      this.mutations.push({
-        kind: mutationCreate(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
-      });
-    }
-    let childIndex: usize = 0;
-    while (childIndex<hostChildCount(element)) {
-      const child = hostChildAt(element, childIndex);
-      if (child !== undefined) {
-        this.snapshot(child!, id, childIndex, emit);
+    let count: usize = 0;
+    let index: usize = 0;
+    while (index<this.nodes.length) {
+      const node = this.nodes.at(index);
+      if (node !== undefined && node!.active) {
+        count = count + 1usize;
       }
-      childIndex = childIndex + 1usize;
+      index = index + 1usize;
     }
-    return id;
+    return count;
   }
-}
-export function resolveTree(element: Element): Element {
-  let current = move element;
-  while (current.kind() === kindFunction()) {
-    current = current.renderNow();
+  public hookComponentCount(): usize {
+    return this.hooks.componentCount();
   }
-  let index: usize = 0;
-  while (index<hostChildCount(current)) {
-    const child = hostChildAt(current, index);
-    if (child !== undefined) {
-      const resolved = resolveTree(child!);
-      hostSetChild(current, index, move resolved);
+  public nodeIdentity(nodeId: i32): u64 | undefined {
+    return nodeIdentity( &this.nodes, nodeId);
+  }
+  public nodeIdentityValue(nodeId: i32): u64 {
+    const value = nodeIdentity( &this.nodes, nodeId);
+    if (value === undefined) {
+      return 0;
     }
-    index = index + 1usize;
+    return value!;
   }
-  return move current;
-}
-export function renderTree(element: Element): Element {
-  beginHookPass();
-  const resolved = resolveTree(move element);
-  finishHookPass();
-  return move resolved;
-}
-function sameNode(previous: Element, next: Element): bool {
-  return previous.kind() === next.kind() && previous.typeId() === next.typeId() && previous.keyId() === next.keyId();
-}
-function hasKeyedChildren(parent: Element): bool {
-  let cursor: usize = 0;
-  while (cursor<hostChildCount(parent)) {
-    const child = hostChildAt(parent, cursor);
-    if (child !== undefined && child!.keyId() !== 0u64) {
-      return true;
-    }
-    cursor = cursor + 1usize;
+  public hasNode(nodeId: i32): bool {
+    const node = nodeAt( &this.nodes, nodeId);
+    return node !== undefined && node!.active;
   }
-  return false;
-}
-function matchingChild(previous: Element, next: Element, index: usize, keyIndex: &KeyIndex): usize | undefined {
-  if (next.keyId() === 0u64) {
-    if (index<hostChildCount(previous)) {
-      return index;
+  public nodeIdForIdentity(identity: u64): i32 | undefined {
+    let index: usize = 0;
+    while (index<this.nodes.length) {
+      const node = this.nodes.at(index);
+      if (node !== undefined && node!.active && node!.identity === identity) {
+        return node!.id;
+      }
+      index = index + 1usize;
     }
     return undefined;
   }
-  return keyIndexGet(keyIndex, next.keyId());
-}
-function diffTree(previous: Element, next: Element, nodeId: i32, parentId: i32, index: usize, mutations: &mut Array<Mutation >): void {
-  if (!sameNode(previous, next)) {
-    mutations.push({
-      kind: mutationReplace(), nodeId: nodeId, parentId: parentId, fromIndex: index, toIndex: index,
-    });
-    return;
-  }
-  if (previous.revision() !== next.revision() || previous.textLength() !== next.textLength() || previous.textHash() !== next.textHash()) {
-    mutations.push({
-      kind: mutationUpdate(), nodeId: nodeId, parentId: parentId, fromIndex: index, toIndex: index,
-    });
-  }
-  if (hostChildCount(previous) === 0usize && hostChildCount(next) === 0usize) {
-    return;
-  }
-  let previousKeyIndex = emptyKeyIndex();
-  let nextKeyIndex = emptyKeyIndex();
-  if (hasKeyedChildren(previous)) {
-    previousKeyIndex = newKeyIndex(hostChildCount(previous) * 2usize);
-  }
-  if (hasKeyedChildren(next)) {
-    nextKeyIndex = newKeyIndex(hostChildCount(next) * 2usize);
-  }
-  let mapIndex: usize = 0;
-  while (mapIndex<hostChildCount(previous)) {
-    const mappedChild = hostChildAt(previous, mapIndex);
-    if (mappedChild !== undefined && mappedChild!.keyId() !== 0u64) {
-      keyIndexInsert( &mut previousKeyIndex, mappedChild!.keyId(), mapIndex);
+  public focusElement(element: &Element): bool {
+    const identity = element.mountedId();
+    if (identity === undefined || !this.mounted || element.generation() !== this.treeGeneration || !setFocusedInTree( &this.root, identity!)) {
+      return false;
     }
-    mapIndex = mapIndex + 1usize;
+    this.focusedIdentity = identity!;
+    return true;
   }
-  mapIndex = 0usize;
-  while (mapIndex<hostChildCount(next)) {
-    const mappedChild = hostChildAt(next, mapIndex);
-    if (mappedChild !== undefined && mappedChild!.keyId() !== 0u64) {
-      keyIndexInsert( &mut nextKeyIndex, mappedChild!.keyId(), mapIndex);
+  public focusFirst(kind: i32): bool {
+    if (!this.mounted) {
+      return false;
     }
-    mapIndex = mapIndex + 1usize;
-  }
-  let nextIndex: usize = 0;
-  while (nextIndex<hostChildCount(next)) {
-    const nextChild = hostChildAt(next, nextIndex);
-    if (nextChild !== undefined) {
-      const oldIndex = matchingChild(previous, nextChild!, nextIndex, &previousKeyIndex);
-      if (oldIndex === undefined) {
-        mutations.push({
-          kind: mutationInsert(), nodeId: - 1i32, parentId: nodeId, fromIndex: 0usize, toIndex: nextIndex,
-        });
-      } else {
-        const previousIndex = oldIndex!;
-        if (previousIndex !== nextIndex && nextChild!.keyId() !== 0u64) {
-          mutations.push({
-            kind: mutationMove(), nodeId: - 1i32, parentId: nodeId, fromIndex: previousIndex, toIndex: nextIndex,
-          });
-        }
-        const previousChild = hostChildAt(previous, previousIndex);
-        if (previousChild !== undefined) {
-          diffTree(previousChild!, nextChild!, - 1i32, nodeId, nextIndex, mutations);
-        }
-      }
+    const identity = firstIdentityOfKind( &this.root, kind);
+    if (identity === undefined) {
+      return false;
     }
-    nextIndex = nextIndex + 1usize;
-  }
-  let previousIndex: usize = 0;
-  while (previousIndex<hostChildCount(previous)) {
-    const previousChild = hostChildAt(previous, previousIndex);
-    if (previousChild !== undefined) {
-      const key = previousChild!.keyId();
-      if ((key === 0u64 && previousIndex >= hostChildCount(next)) ||(key !== 0u64 && keyIndexGet( &nextKeyIndex, key) === undefined)) {
-        mutations.push({
-          kind: mutationRemove(), nodeId: - 1i32, parentId: nodeId, fromIndex: previousIndex, toIndex: 0usize,
-        });
-      }
+    const focused = setFocusedInTree( &this.root, identity!);
+    if (focused) {
+      this.focusedIdentity = identity!;
     }
-    previousIndex = previousIndex + 1usize;
+    return focused;
   }
-  disposeKeyIndex( &mut previousKeyIndex);
-  disposeKeyIndex( &mut nextKeyIndex);
+  public focusedNodeIdentity(): u64 | undefined {
+    return this.focusedIdentity;
+  }
+  public duplicateKeyCount(): usize {
+    return this.duplicateKeyErrors;
+  }
+  public hasDiagnostics(): bool {
+    return this.duplicateKeyErrors !== 0usize || this.hooks.hookOrderErrorCount() !== 0usize;
+  }
+  public beginBatch(): void {
+    beginBatchFor( &mut this.hooks);
+  }
+  public endBatch(): void {
+    endBatchFor( &mut this.hooks);
+  }
+  public setUpdateCallback(callback: () => void): void {
+    setUpdateCallbackFor( &mut this.hooks, move callback);
+  }
+  public clearUpdateCallback(): void {
+    clearUpdateCallbackFor( &mut this.hooks);
+  }
 }

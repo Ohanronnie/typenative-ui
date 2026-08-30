@@ -1,7 +1,6 @@
 import { EmptyProps } from "../src/core/types";
-import { clearHooks } from "../src/hooks/hooks";
 import { Button, createHeadlessRenderer, createReconciler, createScheduler, createUiScheduler, Element, Text, View, Window } from "../src/index";
-import { kindText } from "../src/jsx-runtime";
+import { kindText } from "../src/tnx-runtime";
 
 function hit(): void {
 }
@@ -16,7 +15,7 @@ function Root(props: EmptyProps): Element {
 function main(): i32 {
   using renderer = createHeadlessRenderer();
   renderer.mount(<Root />);
-  if (renderer.queryFirst(kindText()) === undefined) {
+  if (!renderer.hasKind(kindText())) {
     renderer.unmount();
     return 10;
   }
@@ -24,8 +23,7 @@ function main(): i32 {
   reconciler.unmount();
   const scheduler = createScheduler();
   scheduler.clear();
-  createUiScheduler(2usize);
+  createUiScheduler();
   renderer.unmount();
-  clearHooks();
   return 0;
 }

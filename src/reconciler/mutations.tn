@@ -19,7 +19,7 @@ export function mutationReplace(): i32 {
 export struct Mutation {
   public kind: i32;
   public nodeId: i32;
-  public parentId: i32;
+  public parentId: i32 | undefined;
   public fromIndex: usize;
   public toIndex: usize;
 }

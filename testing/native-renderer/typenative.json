@@ -1,5 +1,5 @@
 {
-  "entry": "../public-api.tnx",
+  "entry": "../native-renderer.tnx",
   "target": "aarch64-apple-darwin",
   "jsx": {
     "runtime": "../src/tnx-runtime"
@@ -19,7 +19,13 @@
       "-Wl,-alias,_objc_msgSend,_objc_msgSendBool",
       "-Wl,-alias,_objc_msgSend,_objc_msgSendU64",
       "-Wl,-alias,_objc_msgSend,_objc_msgSendSize",
-      "-Wl,-alias,_objc_msgSend,_objc_msgSendRect"
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendRect",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendF64",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendBoolResult",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendF64Result",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendRange",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendNativeRect",
+      "-Wl,-alias,_objc_msgSend,_objc_msgSendSelectorObjectBool"
     ]
   }
 }

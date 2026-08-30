@@ -2,8 +2,9 @@ import { u64ToUsize, usizeToU64 } from "std/alloc";
 import { BytesMut } from "std/bytes";
 import { Array } from "std/collections";
 import { c_size } from "std/ffi";
-import { createHost, fragmentElements, hostChildAt, kindText, textTypeId, Element } from "../src/jsx-runtime";
+import { String } from "std/string";
 import { HeadlessRenderer } from "../src/renderer/headless";
+import { createHost, createFragmentElements, hostChildAt, keyInteger, kindText, textTypeId, Element } from "../src/tnx-runtime";
 
 declare extern "C" {
   function tn_console_write(fd: i32, bytes: *const u8, length: c_size): i32;
@@ -33,10 +34,10 @@ function keyedItems(reversed: bool, changed: bool): Element {
     if (changed && sourceIndex === 9999usize) {
       label = "changed";
     }
-    children.push(createHost(kindText(), textTypeId(), key, label, emptyChildren()));
+    children.push(createHost(kindText(), textTypeId(), keyInteger(key), String(label), emptyChildren()));
     index = index + 1usize;
   }
-  return fragmentElements(move children);
+  return createFragmentElements(move children);
 }
 function reportAllocations(value: u64): void {
   const buffer = new BytesMut({
@@ -74,7 +75,7 @@ function main(): i32 {
   }
   const reversedRoot = renderer.rootElement();
   const first = hostChildAt(reversedRoot, 0usize);
-  if (first === undefined || first!.keyId() !== usizeToU64(itemCount())) {
+  if (first === undefined || first!.keyIdentity() !== usizeToU64(itemCount())) {
     renderer.unmount();
     return 13;
   }

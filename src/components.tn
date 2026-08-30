@@ -1,109 +1,442 @@
+import { usizeToU64 } from "std/alloc";
 import { Array } from "std/collections";
-import { ButtonProps, EmptyProps, Style, styleSetHeight, styleSetWidth, TextProps, ViewProps, WindowProps } from "./core/types";
-import { bindElementRef, buttonTypeId, createHost, createHostAction, createHostActionStyledWithStyle, createHostStyledWithStyle, createText, Element, ElementRef, fragmentElements, kindButton, kindText, kindView, kindWindow, leaf, StyleSnapshot, textTypeId, viewTypeId, windowTypeId } from "./jsx-runtime";
+import { String } from "std/string";
+import { ButtonProps, CanvasProps, DialogProps, EmptyProps, GridProps, ImageProps, ListProps, MenuProps, ProgressProps, ScrollViewProps, SliderProps, SplitViewProps, StackProps, Style, SwitchProps, TextInputProps, TextProps, ToolbarProps, ViewProps, WindowProps } from "./core/types";
+import { Element, ElementRef, StyleSnapshot, bindElementRef, buttonTypeId, canvasTypeId, createHost, createHostAction, createHostActionWithStyle, createHostWithStyle, createText, createTextInputWithSelection, createFragment, defaultStyleSnapshot, dialogTypeId, gridTypeId, imageTypeId, keyInteger, keyNone, kindButton, kindCanvas, kindDialog, kindGrid, kindImage, kindList, kindMenu, kindProgress, kindScrollView, kindSlider, kindSplitView, kindStack, kindSwitch, kindText, kindToolbar, kindView, kindWindow, listTypeId, menuTypeId, progressTypeId, scrollViewTypeId, sliderTypeId, splitViewTypeId, stackTypeId, switchTypeId, textTypeId, toolbarTypeId, viewTypeId, windowTypeId } from "./tnx-runtime";
 
-function emptyChildren(): Array<Element> {
-  return new Array<Element>({
-    capacity: 0
-  });
-}
-function hostWithOneChild(kind: i32, typeId: u64, keyId: u64, text: &str, child: Element): Element {
+function oneChild(child: Element): Array<Element> {
   const children = new Array<Element>({
-    capacity: 1
+    capacity: 1usize
   });
   children.push(move child);
-  return createHost(kind, typeId, keyId, text, move children);
+  return move children;
 }
-function snapshotStyle(style: &Style): StyleSnapshot {
+function noChildren(): Array<Element> {
+  return new Array<Element>({
+    capacity: 0usize
+  });
+}
+function snapshot(style: &Style): StyleSnapshot {
   return {
     width: style.width, height: style.height, minWidth: style.minWidth, minHeight: style.minHeight, maxWidth: style.maxWidth, maxHeight: style.maxHeight, margin: style.margin, padding: style.padding, marginTop: style.marginTop, marginRight: style.marginRight, marginBottom: style.marginBottom, marginLeft: style.marginLeft, paddingTop: style.paddingTop, paddingRight: style.paddingRight, paddingBottom: style.paddingBottom, paddingLeft: style.paddingLeft, gap: style.gap, flex: style.flex, flexGrow: style.flexGrow, flexShrink: style.flexShrink, flexBasis: style.flexBasis, flexDirection: style.flexDirection, alignItems: style.alignItems, alignSelf: style.alignSelf, justifyContent: style.justifyContent, positionType: style.positionType, insetTop: style.insetTop, insetRight: style.insetRight, insetBottom: style.insetBottom, insetLeft: style.insetLeft, display: style.display, overflow: style.overflow, aspectRatio: style.aspectRatio, hasMarginEdges: style.hasMarginEdges, hasPaddingEdges: style.hasPaddingEdges, revision: style.revision,
   };
 }
-function bindOptionalRef(element: Element, reference: &ElementRef | undefined): Element {
+function withReference(element: Element, reference: &ElementRef | undefined): Element {
   if (reference !== undefined) {
     return bindElementRef(move element, reference!);
   }
   return move element;
 }
+function applyMetadata(element: &mut Element, label: string | undefined, role: i32 | undefined, enabled: bool | undefined): void {
+  if (label !== undefined) {
+    element.setAccessibilityLabel(label!.clone());
+  }
+  if (role !== undefined) {
+    element.setAccessibilityRole(role!);
+  }
+  if (enabled !== undefined) {
+    element.setAccessibilityEnabled(enabled!);
+  }
+}
+function finishElement(element: Element, reference: &ElementRef | undefined, label: string | undefined, role: i32 | undefined, enabled: bool | undefined): Element {
+  let result = move element;
+  applyMetadata( &mut result, label, role, enabled);
+  return withReference(move result, reference);
+}
+function withStyleAndMetadata(kind: i32, typeId: u64, children: Array<Element>, style: StyleSnapshot, hasStyle: bool, reference: &ElementRef | undefined, label: string | undefined, role: i32 | undefined, enabled: bool | undefined): Element {
+  let element = createHost(kind, typeId, keyNone(), String(""), move children);
+  if (hasStyle) {
+    element.setStyle(move style);
+  }
+  applyMetadata( &mut element, label, role, enabled);
+  return withReference(move element, reference);
+}
 export function View(props: ViewProps): Element {
   const reference = props.elementRef;
-  const styled = props.style !== undefined;
-  let element: Element = leaf();
-  if (styled) {
-    const snapshot = snapshotStyle( &props.style!);
-    const child = move props.children;
-    const children = new Array<Element>({
-      capacity: 1
-    });
-    children.push(move child);
-    element = createHostStyledWithStyle(kindView(), viewTypeId(), snapshot.revision, "", move children, move snapshot);
-  } else {
-    const child = move props.children;
-    element = hostWithOneChild(kindView(), viewTypeId(), 0u64, "", move child);
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let styleSnapshot = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    styleSnapshot = snapshot( &props.style!);
+    hasStyle = true;
   }
-  return bindOptionalRef(move element, reference);
+  const children = move props.children;
+  return withStyleAndMetadata(kindView(), viewTypeId(), oneChild(move children), move styleSnapshot, hasStyle, reference, label, role, enabled);
 }
 export function Text(props: TextProps): Element {
   const reference = props.elementRef;
-  const element = createText(props.children.asStr());
-  return bindOptionalRef(move element, reference);
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  const value = props.children.clone();
+  let element = createHost(kindText(), textTypeId(), keyNone(), move value, noChildren());
+  applyMetadata( &mut element, label, role, enabled);
+  return withReference(move element, reference);
 }
 export function Button(props: ButtonProps): Element {
   const reference = props.elementRef;
-  const label = props.children.asStr();
+  const labelMetadata = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const accessibilityEnabled = props.accessibilityEnabled;
+  const enabled = props.enabled;
+  const label = props.children.clone();
+  const onPress = props.onPress;
   const action = move(): void => {
-    props.onPress();
+    onPress();
   };
-  const element = createHostAction(kindButton(), buttonTypeId(), 0u64, label, emptyChildren(), move action);
-  return bindOptionalRef(move element, reference);
+  let element = createHostAction(kindButton(), buttonTypeId(), keyNone(), move label, noChildren(), move action);
+  applyMetadata( &mut element, labelMetadata, role, accessibilityEnabled);
+  if (enabled !== undefined) {
+    element.setAccessibilityEnabled(enabled!);
+  }
+  return withReference(move element, reference);
+}
+export function TextInput(props: TextInputProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const accessibilityEnabled = props.accessibilityEnabled;
+  const enabled = props.enabled;
+  const selectionStart = props.selectionStart;
+  const selectionEnd = props.selectionEnd;
+  const onChange = props.onChange;
+  let value = String("");
+  if (props.value !== undefined) {
+    value = props.value!.clone();
+  } else if (props.defaultValue !== undefined) {
+    value = props.defaultValue!.clone();
+  }
+  let placeholder = String("");
+  if (props.placeholder !== undefined) {
+    placeholder = props.placeholder!.clone();
+  }
+  let change: (string) => void = move(_: string): void => {
+  };
+  if (onChange !== undefined) {
+    change = onChange!;
+  }
+  let element = createTextInputWithSelection(move value, move placeholder, move change, selectionStart, selectionEnd);
+  applyMetadata( &mut element, label, role, accessibilityEnabled);
+  if (enabled !== undefined) {
+    element.setAccessibilityEnabled(enabled!);
+  }
+  return withReference(move element, reference);
 }
 export function Window(props: WindowProps): Element {
   const reference = props.elementRef;
-  const title = props.title.asStr();
-  const child = move props.children;
-  let element: Element = leaf();
-  if (props.width !== undefined || props.height !== undefined) {
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  const title = props.title.clone();
+  const width = props.width;
+  const height = props.height;
+  if (width !== undefined || height !== undefined) {
     const style = new Style();
-    if (props.width !== undefined) {
-      styleSetWidth( &mut style, props.width!);
+    if (width !== undefined) {
+      style.width = width!;
     }
-    if (props.height !== undefined) {
-      styleSetHeight( &mut style, props.height!);
+    if (height !== undefined) {
+      style.height = height!;
     }
-    const snapshot = snapshotStyle( &style);
-    element = createHostStyledWithStyle(kindWindow(), windowTypeId(), snapshot.revision, title, move singleChild(child), move snapshot);
-  } else {
-    element = hostWithOneChild(kindWindow(), windowTypeId(), 0u64, title, move child);
+    const child = move props.children;
+    return finishElement(createHostWithStyle(kindWindow(), windowTypeId(), keyNone(), move title, oneChild(move child), snapshot( &style)), reference, label, role, enabled);
   }
-  return bindOptionalRef(move element, reference);
+  const child = move props.children;
+  return finishElement(createHost(kindWindow(), windowTypeId(), keyNone(), move title, oneChild(move child)), reference, label, role, enabled);
 }
-function singleChild(child: Element): Array<Element> {
+export function Image(props: ImageProps): Element {
+  const reference = props.elementRef;
+  const metadataLabel = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  const source = props.source.clone();
+  let label = String("");
+  if (props.alt !== undefined) {
+    label = props.alt!.clone();
+  }
+  let element = createHost(kindImage(), imageTypeId(), keyNone(), move label, noChildren());
+  element.setImageSource(move source);
+  if (props.style !== undefined) {
+    element.setStyle(snapshot( &props.style!));
+  }
+  applyMetadata( &mut element, metadataLabel, role, enabled);
+  return withReference(move element, reference);
+}
+export function ScrollView(props: ScrollViewProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let style = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    style = snapshot( &props.style!);
+    hasStyle = true;
+  }
+  const children = move props.children;
+  return withStyleAndMetadata(kindScrollView(), scrollViewTypeId(), oneChild(move children), move style, hasStyle, reference, label, role, enabled);
+}
+export function List(props: ListProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let style = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    style = snapshot( &props.style!);
+    hasStyle = true;
+  }
+  let itemHeight = props.itemHeight;
+  if (itemHeight <= 0.0f32) {
+    itemHeight = 32.0f32;
+  }
+  let firstIndex = 0usize;
+  if (props.firstVisibleIndex !== undefined) {
+    firstIndex = props.firstVisibleIndex!;
+  }
+  if (firstIndex > props.itemCount) {
+    firstIndex = props.itemCount;
+  }
+  let visibleCount = 16usize;
+  if (props.visibleItemCount !== undefined && props.visibleItemCount! > 0usize) {
+    visibleCount = props.visibleItemCount!;
+  }
+  let overscan = 2usize;
+  if (props.overscan !== undefined) {
+    overscan = props.overscan!;
+  }
+  let end = firstIndex + visibleCount + overscan;
+  if (end > props.itemCount) {
+    end = props.itemCount;
+  }
   const children = new Array<Element>({
-    capacity: 1
+    capacity: end - firstIndex
   });
-  children.push(move child);
-  return move children;
+  const renderItem = props.renderItem;
+  let index = firstIndex;
+  while (index<end) {
+    let child = renderItem(index);
+    child.setKeyIfAbsent(keyInteger(usizeToU64(index)));
+    children.push(move child);
+    index = index + 1usize;
+  }
+  let element = withStyleAndMetadata(kindList(), listTypeId(), move children, move style, hasStyle, reference, label, role, enabled);
+  element.setVirtualList(props.itemCount, firstIndex, itemHeight);
+  if (props.onVisibleRangeChange !== undefined) {
+    element.setVisibleRangeChange(props.onVisibleRangeChange!);
+  }
+  return move element;
+}
+export function Switch(props: SwitchProps): Element {
+  const reference = props.elementRef;
+  const labelMetadata = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const accessibilityEnabled = props.accessibilityEnabled;
+  const enabled = props.enabled;
+  const onChange = props.onChange;
+  const valueProp = props.value;
+  const defaultValue = props.defaultValue;
+  let value = false;
+  if (valueProp !== undefined) {
+    value = valueProp!;
+  } else if (defaultValue !== undefined) {
+    value = defaultValue!;
+  }
+  let element = createHost(kindSwitch(), switchTypeId(), keyNone(), String(""), noChildren());
+  element.setChecked(value);
+  if (onChange !== undefined) {
+    element.setBooleanChange(onChange!);
+  }
+  applyMetadata( &mut element, labelMetadata, role, accessibilityEnabled);
+  if (enabled !== undefined) {
+    element.setAccessibilityEnabled(enabled!);
+  }
+  return withReference(move element, reference);
+}
+export function Slider(props: SliderProps): Element {
+  const reference = props.elementRef;
+  const labelMetadata = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const accessibilityEnabled = props.accessibilityEnabled;
+  const enabled = props.enabled;
+  const onChange = props.onChange;
+  const valueProp = props.value;
+  const defaultValue = props.defaultValue;
+  const minimumProp = props.minimumValue;
+  const maximumProp = props.maximumValue;
+  let value = 0.0f32;
+  if (valueProp !== undefined) {
+    value = valueProp!;
+  } else if (defaultValue !== undefined) {
+    value = defaultValue!;
+  }
+  let minimum = 0.0f32;
+  if (minimumProp !== undefined) {
+    minimum = minimumProp!;
+  }
+  let maximum = 1.0f32;
+  if (maximumProp !== undefined) {
+    maximum = maximumProp!;
+  }
+  let element = createHost(kindSlider(), sliderTypeId(), keyNone(), String(""), noChildren());
+  element.setNumericValue(value);
+  element.setValueRange(minimum, maximum);
+  if (onChange !== undefined) {
+    element.setNumericChange(onChange!);
+  }
+  applyMetadata( &mut element, labelMetadata, role, accessibilityEnabled);
+  if (enabled !== undefined) {
+    element.setAccessibilityEnabled(enabled!);
+  }
+  return withReference(move element, reference);
+}
+export function Progress(props: ProgressProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  const value = props.value;
+  const minimumProp = props.minimumValue;
+  const maximumProp = props.maximumValue;
+  let minimum = 0.0f32;
+  if (minimumProp !== undefined) {
+    minimum = minimumProp!;
+  }
+  let maximum = 1.0f32;
+  if (maximumProp !== undefined) {
+    maximum = maximumProp!;
+  }
+  const styleProp = props.style;
+  let element = createHost(kindProgress(), progressTypeId(), keyNone(), String(""), noChildren());
+  if (styleProp !== undefined) {
+    element.setStyle(snapshot( &styleProp!));
+  }
+  element.setNumericValue(value);
+  element.setValueRange(minimum, maximum);
+  applyMetadata( &mut element, label, role, enabled);
+  return withReference(move element, reference);
+}
+export function Menu(props: MenuProps): Element {
+  const reference = props.elementRef;
+  const labelMetadata = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  const titleProp = props.title;
+  const childProp = props.children;
+  let title = String("");
+  if (titleProp !== undefined) {
+    title = titleProp!.clone();
+  }
+  let children = noChildren();
+  if (childProp !== undefined) {
+    children = oneChild(move childProp!);
+  }
+  let element = createHost(kindMenu(), menuTypeId(), keyNone(), move title, move children);
+  applyMetadata( &mut element, labelMetadata, role, enabled);
+  return withReference(move element, reference);
+}
+export function Dialog(props: DialogProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  const title = props.title.clone();
+  const child = move props.children;
+  let element = createHost(kindDialog(), dialogTypeId(), keyNone(), move title, oneChild(move child));
+  applyMetadata( &mut element, label, role, enabled);
+  return withReference(move element, reference);
+}
+export function Toolbar(props: ToolbarProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let style = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    style = snapshot( &props.style!);
+    hasStyle = true;
+  }
+  const child = move props.children;
+  return withStyleAndMetadata(kindToolbar(), toolbarTypeId(), oneChild(move child), move style, hasStyle, reference, label, role, enabled);
+}
+export function SplitView(props: SplitViewProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let style = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    style = snapshot( &props.style!);
+    hasStyle = true;
+  }
+  const child = move props.children;
+  return withStyleAndMetadata(kindSplitView(), splitViewTypeId(), oneChild(move child), move style, hasStyle, reference, label, role, enabled);
+}
+export function Stack(props: StackProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let style = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    style = snapshot( &props.style!);
+    hasStyle = true;
+  }
+  const child = move props.children;
+  return withStyleAndMetadata(kindStack(), stackTypeId(), oneChild(move child), move style, hasStyle, reference, label, role, enabled);
+}
+export function Grid(props: GridProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let style = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    style = snapshot( &props.style!);
+    hasStyle = true;
+  }
+  const child = move props.children;
+  return withStyleAndMetadata(kindGrid(), gridTypeId(), oneChild(move child), move style, hasStyle, reference, label, role, enabled);
+}
+export function Canvas(props: CanvasProps): Element {
+  const reference = props.elementRef;
+  const label = props.accessibilityLabel;
+  const role = props.accessibilityRole;
+  const enabled = props.accessibilityEnabled;
+  let style = defaultStyleSnapshot();
+  let hasStyle = false;
+  if (props.style !== undefined) {
+    style = snapshot( &props.style!);
+    hasStyle = true;
+  }
+  const childProp = props.children;
+  let children = noChildren();
+  if (childProp !== undefined) {
+    children = oneChild(move childProp!);
+  }
+  return withStyleAndMetadata(kindCanvas(), canvasTypeId(), move children, move style, hasStyle, reference, label, role, enabled);
 }
 export function emptyView(props: EmptyProps): Element {
-  return createHost(kindView(), viewTypeId(), 0u64, "", emptyChildren());
+  return createHost(kindView(), viewTypeId(), keyNone(), String(""), noChildren());
 }
 export function createTextNode(value: &str): Element {
-  return createHost(kindText(), textTypeId(), 0u64, value, emptyChildren());
+  return createText(value);
 }
 export function styledView(style: &Style, child: Element): Element {
-  const snapshot = snapshotStyle(style);
-  const children = new Array<Element>({
-    capacity: 1
-  });
-  children.push(move child);
-  return createHostStyledWithStyle(kindView(), viewTypeId(), snapshot.revision, "", move children, move snapshot);
+  return createHostWithStyle(kindView(), viewTypeId(), keyNone(), String(""), oneChild(move child), snapshot(style));
 }
 export function stack(style: &Style, children: Array<Element >): Element {
-  const snapshot = snapshotStyle(style);
-  return createHostStyledWithStyle(kindView(), viewTypeId(), snapshot.revision, "", move children, move snapshot);
+  return createHostWithStyle(kindView(), viewTypeId(), keyNone(), String(""), move children, snapshot(style));
 }
-export function fragment(children: Array<Element >): Element {
-  return fragmentElements(move children);
+export function createFragmentChildren(children: Array<Element >): Element {
+  return createFragment(move children);
 }
 export function row(children: Array<Element >): Element {
   const style = new Style();
@@ -116,12 +449,11 @@ export function column(children: Array<Element >): Element {
   return stack( &style, move children);
 }
 export function button(label: &str, action: () => void): Element {
-  return createHostAction(kindButton(), buttonTypeId(), 0u64, label, emptyChildren(), move action);
+  return createHostAction(kindButton(), buttonTypeId(), keyNone(), String(label), noChildren(), move action);
 }
 export function styledButton(style: &Style, label: &str, action: () => void): Element {
-  const snapshot = snapshotStyle(style);
-  return createHostActionStyledWithStyle(kindButton(), buttonTypeId(), snapshot.revision, label, emptyChildren(), move action, move snapshot);
+  return createHostActionWithStyle(kindButton(), buttonTypeId(), keyNone(), String(label), noChildren(), move action, snapshot(style));
 }
 export function window(title: &str, child: Element): Element {
-  return hostWithOneChild(kindWindow(), windowTypeId(), 0u64, title, move child);
+  return createHost(kindWindow(), windowTypeId(), keyNone(), String(title), oneChild(move child));
 }

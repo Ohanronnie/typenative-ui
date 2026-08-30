@@ -1,0 +1,15 @@
+struct Props {
+}
+function first(props: Props): i32 {
+  return 1;
+}
+function second(props: Props): i32 {
+  return 2;
+}
+function main(): i32 {
+  unsafe {
+    const firstPointer = first as *const u8;
+    const secondPointer = second as *const u8;
+    return firstPointer === secondPointer?1i32: 0i32;
+  }
+}

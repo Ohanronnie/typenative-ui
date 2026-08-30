@@ -9,42 +9,49 @@ and libc++.
 
 `NativeRenderer.start` loads AppKit and creates the shared `NSApplication`.
 `mount` creates one `NSWindow`, builds the native subtree from the resolved
-element records, applies Yoga frames, attaches button action targets, and
-shows the window. `update` retains that same window pointer while rebuilding
-the native subtree from the new tree. `closeWindow` closes the window,
-`stop` terminates the application object, and `dispose` releases target objects
-and native object references.
+element records, applies Yoga frames, attaches control targets and text field
+delegates, and shows the window. `update` retains that same window pointer and
+applies the reconciler's create, insert, move, remove, replace, and update
+mutations to the native records. `close` closes the window, `stop` terminates
+the application object, and `dispose` releases target objects, Yoga nodes, and
+native object references.
 
-The Workbench asserts that the window remains the same across an update and
-that a simulated native button press changes the next rendered tree.
+The native smoke fixture asserts that a window and native controls mount and
+teardown cleanly. The interactive Counter example uses the same renderer and
+keeps the AppKit event loop open through `runApp`.
 
 ## Ownership rules
 
 Native objects returned from `alloc/init` are owned by the renderer until the
 corresponding release. Text fields receive an owned `NSString` value through
-`setStringValue:`. Button target objects are retained in explicit slots and
-released when the tree is rebuilt or the renderer stops.
+`setStringValue:`. Button and text-input target objects are retained by their
+native records and released when the tree is rebuilt or the renderer stops.
 
-Yoga owns the native layout nodes during a mount. Teardown uses
-`YGNodeFreeRecursive` so every child and sibling is released exactly once.
-The framework keeps only the record-level style snapshot and the resulting
-frames; it does not retain Yoga nodes after renderer disposal.
+Yoga nodes are owned by the corresponding native records during a mount. The
+renderer removes child nodes before calling `YGNodeFree`, so every node is
+released exactly once. The framework keeps only the record-level style
+snapshot and resulting frames after layout; it does not retain Yoga nodes after
+renderer disposal.
 
 ## Event path
 
-AppKit invokes `nativeButtonCallback` on the UI thread. The callback resolves
-the action slot stored on the button record and runs it inside `batch`, so
-multiple state changes from one press produce one pending-update notification.
-The host can then render the next tree and call `update`.
+AppKit invokes `nativeTargetCallback` on the UI thread. The callback resolves
+the mounted identity stored in the target object and routes button presses or
+text changes to the reconciler inside a batch. A registered renderer callback
+then renders the next tree and commits its mutations on the same UI thread.
 
-`runApp` owns this loop for a standalone application. Tests and the Workbench
-use explicit start, mount, event, render, update, close, and stop calls so the
-process remains deterministic and exits without an interactive event loop.
+`runApp` owns this loop for a standalone application. The smoke test uses
+explicit mount, assertions, close, and stop calls so the process remains
+deterministic and exits without an interactive event loop.
 
-## Limitations that are part of the contract
+## Platform boundary
 
-The native backend currently supports Window, View, Text, and Button records.
-The reconciler records minimal mutations, while native update commitment
-rebuilds the native subtree. Accessibility helpers are present in the public
-surface and the headless backend exposes role, label-length, focus, and press
+The native backend is intentionally macOS-only. It maps Window and Dialog to
+AppKit windows or panels; View, Stack, Grid, SplitView, and Canvas to native
+views; Text, Button, TextInput, Image, ScrollView, List, Switch, Slider, and
+Progress to their corresponding AppKit controls; and Menu and Toolbar to
+their AppKit container objects. It uses AppKit and the Objective-C runtime
+directly; there is no Linux renderer, generated C backend, or project-owned
+Objective-C bridge. Accessibility helpers are present in the public surface,
+and the headless backend exposes role, label-length, focus, and event
 operations for deterministic verification.

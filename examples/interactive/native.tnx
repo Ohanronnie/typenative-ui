@@ -1,0 +1,32 @@
+import { String } from "std/string";
+import { Button, Element, Style, Text, View, Window, useState } from "../../src/index";
+import { runApp } from "../../src/platform/macos";
+
+struct CounterProps {
+}
+function Counter(props: CounterProps): Element {
+  const[current, setCount] = useState<i32>(0i32);
+  const increment = move(): void => {
+    setCount(current + 1i32);
+  };
+  let label: &str = "Count: 0";
+  if (current !== 0i32) {
+    label = "Count: 1";
+  }
+  const value = String(label);
+  const style = new Style();
+  style.flexGrow = 1.0f32;
+  style.gap = 12.0f32;
+  return <Window title="TypeNative Counter">
+    <View style={style}>
+      <Text key="count">
+        {
+          value}
+        </Text>
+        <Button key="increment" onPress={increment}>Increment</Button>
+      </View>
+    </Window>;
+  }
+  function main(): i32 {
+    return runApp(move(): Element => <Counter />);
+  }

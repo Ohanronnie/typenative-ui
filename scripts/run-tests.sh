@@ -86,6 +86,7 @@ run_timed yoga sh scripts/check-yoga.sh
 run_timed compiler-boundary sh scripts/verify-compiler-boundary.sh "${TYPE_NATIVE_COMPILER_ROOT:-.compiler}"
 
 build_and_run root testing/typenative.json debug address
+build_and_run renderer-smoke testing/renderer-smoke/typenative.json debug address
 build_and_run button testing/button/typenative.json debug address
 build_and_run headless-events testing/headless-events/typenative.json debug address
 build_and_run hooks-integration testing/hooks-integration/typenative.json debug address
@@ -99,9 +100,12 @@ build_and_run reconciler testing/reconciler/typenative.json debug address
 build_and_run multi testing/multi/typenative.json debug address
 build_and_run async testing/async/typenative.json debug address
 build_and_run public-api testing/public-api/typenative.json debug address
-build_and_run workbench typenative.json debug address
+build_and_run list testing/list/typenative.json debug address
+build_and_run native-renderer testing/native-renderer/typenative.json debug address
+build_and_run native-components testing/native-components/typenative.json debug address
 
 build_and_run root testing/typenative.json optimized none
+build_and_run renderer-smoke testing/renderer-smoke/typenative.json optimized none
 build_and_run button testing/button/typenative.json optimized none
 build_and_run headless-events testing/headless-events/typenative.json optimized none
 build_and_run hooks-integration testing/hooks-integration/typenative.json optimized none
@@ -115,8 +119,10 @@ build_and_run reconciler testing/reconciler/typenative.json optimized none
 build_and_run multi testing/multi/typenative.json optimized none
 build_and_run async testing/async/typenative.json optimized none
 build_and_run public-api testing/public-api/typenative.json optimized none
+build_and_run list testing/list/typenative.json optimized none
 build_and_run benchmark benchmarks/typenative.json optimized address
-build_and_run workbench typenative.json optimized none
+build_and_run native-renderer testing/native-renderer/typenative.json optimized none
+build_and_run native-components testing/native-components/typenative.json optimized none
 
 build_and_run headless-undefined testing/headless-events/typenative.json debug undefined
 build_and_run scheduler-undefined testing/scheduler/typenative.json debug undefined

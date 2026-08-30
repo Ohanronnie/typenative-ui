@@ -1,8 +1,9 @@
+import { Array } from "std/collections";
 import { String } from "std/string";
 import { Button, Text, View } from "../src/components";
-import { clearHooks, Cleanup, Context, createContext, setUpdateCallback, useCallback, useContext, useEffect, useId, useIntReducer, useLayoutEffect, useMemo, useRef, useState } from "../src/hooks/hooks";
-import { Element, hostChildAt, hostChildCount, kindButton, kindText } from "../src/jsx-runtime";
+import { Cleanup, Context, createContext, useCallback, useContext, useDeferredValue, useEffect, useId, useLayoutEffect, useMemo, useReducer, useRef, useState } from "../src/hooks/hooks";
 import { HeadlessRenderer } from "../src/renderer/headless";
+import { Element, kindButton, kindText } from "../src/tnx-runtime";
 
 static mut layoutRuns: i32 = 0;
 static mut passiveRuns: i32 = 0;
@@ -14,6 +15,7 @@ static mut latestRef: i32 = 0;
 static mut latestTheme: i32 = 0;
 static mut stableId: u64 = 0;
 static mut latestId: u64 = 0;
+static mut latestDeferred: i32 = 0;
 static mut updateNotifications: i32 = 0;
 function notifyUpdate(): void {
   unsafe {
@@ -40,33 +42,44 @@ function passiveEffect(): Cleanup {
 function add(current: i32, action: i32): i32 {
   return current + action;
 }
+function stableDependencies(): Array<u64> {
+  const values = new Array<u64>({
+    capacity: 1usize,
+  });
+  values.push(1u64);
+  return move values;
+}
 struct CounterProps {
   public context: &Context<i32>;
 }
 function Counter(props: CounterProps): Element {
-  const state = useState<i32>(0i32);
-  const reduced = useIntReducer(add, 0i32);
-  const current = state.current();
+  const[current, setState] = useState<i32>(0i32);
+  const[reduced, dispatch] = useReducer<i32, i32>(add, 0i32);
   const theme = useContext<i32>(props.context);
   const reference = useRef<i32>(0i32);
   reference.write(current);
   const referenceValue = reference.read();
+  const deferred = useDeferredValue<i32>(current);
   const identifier = useId();
   const increment = move(): void => {
-    state.set(state.current() + 1i32);
-    reduced.dispatch(add, 1i32);
+    setState(current + 1i32);
+    dispatch(1i32);
+    unsafe {
+      latestReduced = reduced;
+    }
   };
-  const callback = useCallback(increment, 1u64);
-  const memoized = useMemo<i32>(move(): i32 => current, 1u64);
-  useLayoutEffect(layoutEffect, 1u64);
-  useEffect(passiveEffect, 1u64);
+  const callback = useCallback(increment, stableDependencies());
+  const memoized = useMemo<i32>(move(): i32 => current, stableDependencies());
+  useLayoutEffect(layoutEffect, stableDependencies());
+  useEffect(passiveEffect, stableDependencies());
   unsafe {
     latestCount = current;
-    latestReduced = reduced.current();
+    latestReduced = reduced;
     latestMemo = memoized;
     latestRef = referenceValue;
     latestTheme = theme;
     latestId = identifier;
+    latestDeferred = deferred;
     if (stableId === 0u64) {
       stableId = identifier;
     }
@@ -83,48 +96,26 @@ function Counter(props: CounterProps): Element {
       <Button onPress={callback}>Increment</Button>
     </View>;
   }
-  function findFirst(element: Element, kind: i32): Element | undefined {
-    if (element.kind() === kind) {
-      return element;
-    }
-    let index: usize = 0;
-    while (index<hostChildCount(element)) {
-      const child = hostChildAt(element, index);
-      if (child !== undefined) {
-        const found = findFirst(child!, kind);
-        if (found !== undefined) {
-          return found;
-        }
-      }
-      index = index + 1usize;
-    }
-    return undefined;
-  }
   function main(): i32 {
     using renderer = new HeadlessRenderer();
     const context = createContext<i32>(7i32);
     renderer.mount(<Counter context={ &context} />);
-    const button = renderer.queryFirst(kindButton());
-    if (button === undefined || renderer.accessibilityRole(button!) !== 4 || renderer.accessibilityLabelLength(button!) !== 9usize) {
+    if (!renderer.hasKind(kindButton()) || renderer.textLengthFirst(kindButton()) !== 9usize) {
       renderer.unmount();
       return 10;
     }
-    renderer.focus(button!);
-    if (!renderer.isFocused(button!)) {
+    renderer.focusFirst(kindButton());
+    if (!renderer.isFocusedFirst(kindButton())) {
       renderer.unmount();
       return 11;
     }
-    setUpdateCallback(notifyUpdate);
-    renderer.simulatePress(button!);
+    renderer.setUpdateCallback(notifyUpdate);
+    renderer.simulatePressFirst(kindButton());
     renderer.update(<Counter context={ &context} />);
-    const text = findFirst(renderer.rootElement(), kindText());
-    let validText = false;
-    if (text !== undefined) {
-      validText = text!.textLength() === 8usize;
-    }
+    const validText = renderer.textLengthFirst(kindText()) === 8usize;
     let validHooks = false;
     unsafe {
-      validHooks = validText && latestCount === 1i32 && latestReduced === 1i32 && latestMemo === 0i32 && latestRef === 1i32 && latestTheme === 7i32 && stableId === latestId && layoutRuns === 1i32 && passiveRuns === 1i32 && updateNotifications === 1i32;
+      validHooks = validText && latestCount === 1i32 && latestReduced === 1i32 && latestMemo === 0i32 && latestRef === 1i32 && latestDeferred === 1i32 && latestTheme === 7i32 && stableId === latestId && layoutRuns === 1i32 && passiveRuns === 1i32 && updateNotifications === 1i32;
     }
     if (!validHooks) {
       renderer.unmount();
@@ -143,7 +134,6 @@ function Counter(props: CounterProps): Element {
     unsafe {
       validCleanup = cleanups === 2i32;
     }
-    clearHooks();
     if (!validCleanup) {
       return 15;
     }

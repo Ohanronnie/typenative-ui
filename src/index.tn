@@ -1,36 +1,60 @@
-import { AccessibilityNode, AccessibilityTree } from "./accessibility/accessibility";
-import { Animation, Animator } from "./animation/animation";
-import { Button as NativeButton, Text as NativeText, View as NativeView, Window as NativeWindowComponent } from "./components";
-import { ButtonProps as CoreButtonProps, Style as CoreStyle, TextProps as CoreTextProps, ViewProps as CoreViewProps, WindowProps as CoreWindowProps } from "./core/types";
-import { batch as hookBatch, clearHooks, Context as HookContext, Cleanup, flushLayoutEffects, flushPassiveEffects, useCallback as hookUseCallback, useContext as hookUseContext, useEffect as hookUseEffect, useId as hookUseId, useIntReducer as hookUseIntReducer, useLayoutEffect as hookUseLayoutEffect, useMemo as hookUseMemo, useReducer as hookUseReducer, useRef as hookUseRef, useState as hookUseState, State as HookState, ReducerState as HookReducerState, Ref as HookRef, IntReducerState as HookIntReducerState } from "./hooks/hooks";
-import { Element as RuntimeElement, ElementRef as RuntimeElementRef } from "./jsx-runtime";
-import { NativeRenderer } from "./platform/macos";
-import { Reconciler as RuntimeReconciler, renderTree } from "./reconciler/reconciler";
+import { Array } from "std/collections";
+import { Button as NativeButton, Canvas as NativeCanvas, Dialog as NativeDialog, Grid as NativeGrid, Image as NativeImage, List as NativeList, Menu as NativeMenu, Progress as NativeProgress, ScrollView as NativeScrollView, Slider as NativeSlider, SplitView as NativeSplitView, Stack as NativeStack, Switch as NativeSwitch, Text as NativeText, TextInput as NativeTextInput, Toolbar as NativeToolbar, View as NativeView, Window as NativeWindowComponent } from "./components";
+import { ButtonProps as CoreButtonProps, CanvasProps as CoreCanvasProps, DialogProps as CoreDialogProps, GridProps as CoreGridProps, ImageProps as CoreImageProps, ListProps as CoreListProps, MenuProps as CoreMenuProps, ProgressProps as CoreProgressProps, ScrollViewProps as CoreScrollViewProps, SliderProps as CoreSliderProps, SplitViewProps as CoreSplitViewProps, StackProps as CoreStackProps, Style as CoreStyle, SwitchProps as CoreSwitchProps, TextInputProps as CoreTextInputProps, TextProps as CoreTextProps, ToolbarProps as CoreToolbarProps, ViewProps as CoreViewProps, WindowProps as CoreWindowProps } from "./core/types";
+import { batch as hookBatch, Context as HookContext, Cleanup, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor, useCallback as hookUseCallback, useContext as hookUseContext, useDeferredValue as hookUseDeferredValue, useEffect as hookUseEffect, useId as hookUseId, useLayoutEffect as hookUseLayoutEffect, useMemo as hookUseMemo, useReducer as hookUseReducer, useRef as hookUseRef, useState as hookUseState, useSyncExternalStore as hookUseSyncExternalStore, useTransition as hookUseTransition, StatePair as HookStatePair, ReducerPair as HookReducerPair, Ref as HookRef, Transition as HookTransition } from "./hooks/hooks";
+import { NativeRenderer as RuntimeNativeRenderer, createNativeRenderer as runtimeCreateNativeRenderer, runApp as runtimeRunApp } from "./platform/macos";
+import { Reconciler as RuntimeReconciler } from "./reconciler/reconciler";
 import { HeadlessRenderer as RuntimeHeadlessRenderer } from "./renderer/headless";
 import { Scheduler as RuntimeScheduler, UiScheduler as RuntimeUiScheduler } from "./scheduler/scheduler";
+import { Element as RuntimeElement, ElementChild as RuntimeElementChild, ElementRef as RuntimeElementRef, Key as RuntimeKey, createElementRef as runtimeCreateElementRef } from "./tnx-runtime";
 
-export type State<T > = HookState<T>;
-export type ReducerState<StateValue, Action > = HookReducerState<StateValue, Action>;
+export type State<T > = HookStatePair<T>;
+export type ReducerState<StateValue, Action > = HookReducerPair<StateValue, Action>;
 export type Ref<T > = HookRef<T>;
-export type IntReducerState = HookIntReducerState;
 export type EffectCleanup = Cleanup;
 export type Element = RuntimeElement;
+export type ElementChild = RuntimeElementChild;
 export type ElementRef = RuntimeElementRef;
+export function createElementRef(): ElementRef {
+  return runtimeCreateElementRef();
+}
+export type Key = RuntimeKey;
 export type Style = CoreStyle;
 export type ButtonProps = CoreButtonProps;
 export type TextProps = CoreTextProps;
+export type TextInputProps = CoreTextInputProps;
 export type ViewProps = CoreViewProps;
 export type WindowProps = CoreWindowProps;
+export type ImageProps = CoreImageProps;
+export type ScrollViewProps = CoreScrollViewProps;
+export type ListProps = CoreListProps;
+export type SwitchProps = CoreSwitchProps;
+export type SliderProps = CoreSliderProps;
+export type ProgressProps = CoreProgressProps;
+export type MenuProps = CoreMenuProps;
+export type DialogProps = CoreDialogProps;
+export type ToolbarProps = CoreToolbarProps;
+export type SplitViewProps = CoreSplitViewProps;
+export type StackProps = CoreStackProps;
+export type GridProps = CoreGridProps;
+export type CanvasProps = CoreCanvasProps;
+export type ComponentType<Props > =(Props) => Element;
+export type HostComponent<Props > =(Props) => Element;
 export type Context<T > = HookContext<T>;
 export type Reconciler = RuntimeReconciler;
 export type HeadlessRenderer = RuntimeHeadlessRenderer;
+export type NativeRenderer = RuntimeNativeRenderer;
 export type Scheduler = RuntimeScheduler;
 export type UiScheduler = RuntimeUiScheduler;
+export type Transition = HookTransition;
 export function Button(props: ButtonProps): Element {
   return NativeButton(move props);
 }
 export function Text(props: TextProps): Element {
   return NativeText(move props);
+}
+export function TextInput(props: TextInputProps): Element {
+  return NativeTextInput(move props);
 }
 export function View(props: ViewProps): Element {
   return NativeView(move props);
@@ -38,26 +62,62 @@ export function View(props: ViewProps): Element {
 export function Window(props: WindowProps): Element {
   return NativeWindowComponent(move props);
 }
+export function Image(props: ImageProps): Element {
+  return NativeImage(move props);
+}
+export function ScrollView(props: ScrollViewProps): Element {
+  return NativeScrollView(move props);
+}
+export function List(props: ListProps): Element {
+  return NativeList(move props);
+}
+export function Switch(props: SwitchProps): Element {
+  return NativeSwitch(move props);
+}
+export function Slider(props: SliderProps): Element {
+  return NativeSlider(move props);
+}
+export function Progress(props: ProgressProps): Element {
+  return NativeProgress(move props);
+}
+export function Menu(props: MenuProps): Element {
+  return NativeMenu(move props);
+}
+export function Dialog(props: DialogProps): Element {
+  return NativeDialog(move props);
+}
+export function Toolbar(props: ToolbarProps): Element {
+  return NativeToolbar(move props);
+}
+export function SplitView(props: SplitViewProps): Element {
+  return NativeSplitView(move props);
+}
+export function Stack(props: StackProps): Element {
+  return NativeStack(move props);
+}
+export function Grid(props: GridProps): Element {
+  return NativeGrid(move props);
+}
+export function Canvas(props: CanvasProps): Element {
+  return NativeCanvas(move props);
+}
 export function useState<T>(initial: T): State<T> {
   return hookUseState<T>(move initial);
 }
 export function useReducer<StateValue, Action>(reducer: (StateValue, Action) => StateValue, initial: StateValue): ReducerState<StateValue, Action> {
   return hookUseReducer<StateValue, Action>(reducer, move initial);
 }
-export function useIntReducer(reducer: (i32, i32) => i32, initial: i32): IntReducerState {
-  return hookUseIntReducer(reducer, initial);
+export function useEffect(effect: () => Cleanup, dependencies: Array<u64 >): void {
+  hookUseEffect(move effect, move dependencies);
 }
-export function useEffect(effect: () => Cleanup, dependencies: u64): void {
-  hookUseEffect(move effect, dependencies);
+export function useLayoutEffect(effect: () => Cleanup, dependencies: Array<u64 >): void {
+  hookUseLayoutEffect(move effect, move dependencies);
 }
-export function useLayoutEffect(effect: () => Cleanup, dependencies: u64): void {
-  hookUseLayoutEffect(move effect, dependencies);
+export function useMemo<T>(factory: () => T, dependencies: Array<u64 >): T {
+  return hookUseMemo<T>(move factory, move dependencies);
 }
-export function useMemo<T>(factory: () => T, dependencies: u64): T {
-  return hookUseMemo<T>(move factory, dependencies);
-}
-export function useCallback(callback: () => void, dependencies: u64): () => void {
-  return hookUseCallback(move callback, dependencies);
+export function useCallback<T>(callback: T, dependencies: Array<u64 >): T {
+  return hookUseCallback<T>(move callback, move dependencies);
 }
 export function useRef<T>(initial: T): Ref<T> {
   return hookUseRef<T>(move initial);
@@ -71,14 +131,26 @@ export function useContext<T>(context: &Context<T >): T {
 export function useId(): u64 {
   return hookUseId();
 }
+export function useTransition(): Transition {
+  return hookUseTransition();
+}
+export function useDeferredValue<T>(value: T): T {
+  return hookUseDeferredValue<T>(move value);
+}
+export function useSyncExternalStore<T>(subscribe: (() => void) => Cleanup, getSnapshot: () => T): T {
+  return hookUseSyncExternalStore<T>(move subscribe, move getSnapshot);
+}
 export function batch(callback: () => void): void {
   hookBatch(move callback);
 }
-export function resolve(root: Element): Element {
-  return renderTree(move root);
-}
 export function createHeadlessRenderer(): RuntimeHeadlessRenderer {
   return new RuntimeHeadlessRenderer();
+}
+export function createNativeRenderer(): RuntimeNativeRenderer {
+  return runtimeCreateNativeRenderer();
+}
+export function runApp(factory: () => Element): i32 {
+  return runtimeRunApp(move factory);
 }
 export function mountHeadless(renderer: RuntimeHeadlessRenderer, root: Element): void {
   renderer.mount(move root);
@@ -89,45 +161,20 @@ export function updateHeadless(renderer: RuntimeHeadlessRenderer, root: Element)
 export function createReconciler(): RuntimeReconciler {
   return new RuntimeReconciler();
 }
+export function clearHookRoot(root: &mut HookRoot): void {
+  root.clear();
+}
+export function setHookRootUpdateCallback(root: &mut HookRoot, callback: () => void): void {
+  setUpdateCallbackFor(root, move callback);
+}
 export function createScheduler(): RuntimeScheduler {
   return new RuntimeScheduler();
 }
-export function createUiScheduler(capacity: usize): RuntimeUiScheduler {
-  return new RuntimeUiScheduler(capacity);
+export function createUiScheduler(): RuntimeUiScheduler {
+  return new RuntimeUiScheduler();
 }
-export function createAnimation(startValue: f64, endValue: f64, duration: f64): Animation {
-  return new Animation(startValue, endValue, duration, 0i32);
-}
-export function createAnimator(): Animator {
-  return new Animator();
-}
-export function createAccessibilityTree(label: &str): AccessibilityTree {
-  return new AccessibilityTree(new AccessibilityNode(0i32, label));
-}
-export function createMacOSRenderer(): NativeRenderer {
-  return new NativeRenderer();
-}
-export function mountMacOS(renderer: NativeRenderer, root: Element, title: &str): bool {
-  return renderer.mount(renderTree(move root), title);
-}
-export function runApp(root: Element): i32 {
-  const renderer = new NativeRenderer();
-  if (!renderer.start()) {
-    root.dispose();
-    clearHooks();
-    return 1;
-  }
-  const resolved = renderTree(move root);
-  flushLayoutEffects();
-  flushPassiveEffects();
-  if (!renderer.mount(move resolved, "TypeNative Application")) {
-    clearHooks();
-    renderer.stop();
-    return 1;
-  }
-  renderer.run();
-  renderer.closeWindow();
-  clearHooks();
-  renderer.stop();
-  return 0;
+export function flush(root: &mut HookRoot): void {
+  flushLayoutEffectsFor(root);
+  flushPassiveEffectsFor(root);
+  root.clear();
 }

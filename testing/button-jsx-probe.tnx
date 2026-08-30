@@ -1,8 +1,8 @@
 import { String } from "std/string";
 import { Button } from "../src/components";
 import { EmptyProps } from "../src/core/types";
-import { dispatchPress, Element } from "../src/jsx-runtime";
-import { renderTree } from "../src/reconciler/reconciler";
+import { HeadlessRenderer } from "../src/renderer/headless";
+import { dispatchPress, Element } from "../src/tnx-runtime";
 
 static mut presses: i32 = 0;
 function hit(): void {
@@ -14,10 +14,12 @@ function Root(props: EmptyProps): Element {
   return <Button onPress={hit}>Go</Button>;
 }
 function main(): i32 {
-  const root = renderTree(<Button onPress={hit}>Go</Button>);
+  using renderer = new HeadlessRenderer();
+  renderer.mount(<Button onPress={hit}>Go</Button>);
+  const root = renderer.rootElement();
   dispatchPress(root);
   const valid = root.textLength() === 2usize;
-  root.dispose();
+  renderer.unmount();
   unsafe {
     if (valid && presses === 1i32) {
       return 0;

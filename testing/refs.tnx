@@ -1,24 +1,28 @@
 import { String } from "std/string";
 import { Button } from "../src/components";
-import { bindElementRef, ElementRef, kindButton } from "../src/jsx-runtime";
+import { HeadlessRenderer } from "../src/renderer/headless";
+import { ElementRef, createElementRef, kindButton } from "../src/tnx-runtime";
 
 function hit(): void {
 }
 function main(): i32 {
-  const reference = new ElementRef();
-  const element = bindElementRef(Button({
+  let reference = createElementRef();
+  using renderer = new HeadlessRenderer();
+  let element = Button({
     children: String("Ref"), onPress: hit,
-  }), &reference);
+  });
+  element.bindReference( &reference);
+  renderer.mount(move element);
   if (!reference.isAttached()) {
-    element.dispose();
+    renderer.unmount();
     return 10;
   }
-  const current = reference.current();
-  if (current.kind() !== kindButton() || current.textLength() !== 3usize) {
-    element.dispose();
+  const mounted = renderer.rootElement();
+  if (mounted.kind() !== kindButton() || mounted.textLength() !== 3usize || reference.nodeIdentity() === undefined) {
+    renderer.unmount();
     return 11;
   }
-  element.dispose();
+  renderer.unmount();
   if (reference.isAttached()) {
     return 12;
   }

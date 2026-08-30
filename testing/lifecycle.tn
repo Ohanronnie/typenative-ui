@@ -1,8 +1,8 @@
 import { Array } from "std/collections";
-import { clearHooks, Cleanup, useEffect, useState } from "../src/hooks/hooks";
-import { createHostSingle, createText, fragmentElements, hostChildAt, jsx, kindText, kindView, viewTypeId, Element } from "../src/jsx-runtime";
+import { Cleanup, useEffect, useState } from "../src/hooks/hooks";
 import { mutationInsert, mutationRemove } from "../src/reconciler/mutations";
 import { HeadlessRenderer } from "../src/renderer/headless";
+import { createHostSingle, createText, createFragmentElements, hostChildAt, createElement, keyNone, kindText, kindView, viewTypeId, Element } from "../src/tnx-runtime";
 
 static mut mounted: i32 = 0;
 static mut cleaned: i32 = 0;
@@ -17,19 +17,26 @@ function effect(): Cleanup {
   }
   return cleanup;
 }
+function stableDependencies(): Array<u64> {
+  const values = new Array<u64>({
+    capacity: 1usize,
+  });
+  values.push(1u64);
+  return move values;
+}
 struct StructMarker {
 }
 function Probe(props: StructMarker): Element {
-  const state = useState<i32>(4i32);
-  useEffect(effect, 1u64);
-  if (state.current() !== 4i32) {
+  const[current, _setCurrent] = useState<i32>(4i32);
+  useEffect(effect, stableDependencies());
+  if (current !== 4i32) {
     return createText("bad");
   }
   return createText("ok");
 }
 function probeElement(): Element {
   const key: string | undefined = undefined;
-  return jsx<StructMarker>(Probe, {
+  return createElement<StructMarker>(Probe, {
   }, move key);
 }
 function unkeyedTree(count: i32): Element {
@@ -41,29 +48,45 @@ function unkeyedTree(count: i32): Element {
   if (count === 3i32) {
     children.push(createText("c"));
   }
-  return fragmentElements(move children);
+  return createFragmentElements(move children);
 }
 function deepTree(depth: usize): Element {
   let current = createText("leaf");
   let index: usize = 0;
   while (index<depth) {
-    current = createHostSingle(kindView(), viewTypeId(), 0u64, move current);
+    current = createHostSingle(kindView(), viewTypeId(), keyNone(), move current);
     index = index + 1usize;
   }
   return move current;
 }
-function main(): i32 {
-  clearHooks();
-  {
-    using renderer = new HeadlessRenderer();
-    renderer.mount(probeElement());
-    unsafe {
-      if (mounted !== 1i32) {
-        renderer.unmount();
-        return 10;
-      }
-    }
+function deepDepth(element: &Element): usize {
+  const child = hostChildAt(element, 0usize);
+  if (child === undefined) {
+    return 0;
+  }
+  return 1 + deepDepth(child!);
+}
+function deepestKind(element: &Element): i32 {
+  const child = hostChildAt(element, 0usize);
+  if (child === undefined) {
+    return element.kind();
+  }
+  return deepestKind(child!);
+}
+function deepestTextLength(element: &Element): usize {
+  const child = hostChildAt(element, 0usize);
+  if (child === undefined) {
+    return element.textLength();
+  }
+  return deepestTextLength(child!);
+}
+function main(): i32{{using renderer = new HeadlessRenderer();
+renderer.mount(probeElement());
+unsafe {
+  if (mounted !== 1i32) {
     renderer.unmount();
+    return 10;
+    }}renderer.unmount();
     unsafe {
       if (cleaned !== 1i32) {
         return 11;
@@ -93,7 +116,6 @@ function main(): i32 {
     }
     renderer.unmount();
   }
-  clearHooks();
   {
     using renderer = new HeadlessRenderer();
     renderer.mount(deepTree(64usize));
@@ -102,22 +124,11 @@ function main(): i32 {
       return 15;
     }
     const root = renderer.rootElement();
-    let cursor = root;
-    let depth: usize = 0;
-    while (hostChildAt(cursor, 0usize) !== undefined) {
-      const child = hostChildAt(cursor, 0usize);
-      if (child === undefined) {
-        break;
-      }
-      cursor = child!;
-      depth = depth + 1usize;
-    }
-    if (depth !== 64usize || cursor.kind() !== kindText() || cursor.textLength() !== 4usize) {
+    if (deepDepth(root) !== 64usize || deepestKind(root) !== kindText() || deepestTextLength(root) !== 4usize) {
       renderer.unmount();
       return 16;
     }
     renderer.unmount();
   }
-  clearHooks();
   return 0;
 }

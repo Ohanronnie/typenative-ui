@@ -39,15 +39,17 @@ function main(): i32 {
     order = 0i32;
     runs = 0i32;
   }
-  using ui = new UiScheduler(4usize);
-  if (!ui.post(Priority.Normal, move(): void => {
+  using ui = new UiScheduler();
+  const normal = ui.post(Priority.Normal, move(): void => {
     mark(2i32);
-  })) {
+  });
+  if (normal === undefined) {
     return 14;
   }
-  if (!ui.post(Priority.Immediate, move(): void => {
+  const immediate = ui.post(Priority.Immediate, move(): void => {
     mark(1i32);
-  })) {
+  });
+  if (immediate === undefined) {
     return 15;
   }
   if (ui.drain(4usize) !== 2usize) {

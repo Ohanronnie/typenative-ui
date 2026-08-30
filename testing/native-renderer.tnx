@@ -1,0 +1,96 @@
+import { nullPointer } from "std/alloc";
+import { String } from "std/string";
+import { Button, Text, TextInput, View, Window } from "../src/components";
+import { useState } from "../src/hooks/hooks";
+import { NativeRenderer } from "../src/platform/macos";
+import { Element, ElementRef, createElementRef } from "../src/tnx-runtime";
+
+static mut textChangeCount: i32 = 0;
+struct SmokeProps {
+  public inputRef: &ElementRef;
+  public buttonRef: &ElementRef;
+}
+function Smoke(props: SmokeProps): Element {
+  const[current, setPresses] = useState<i32>(0i32);
+  const press = move(): void => {
+    setPresses(current + 1i32);
+  };
+  const change = move(_: string): void => {
+    unsafe {
+      textChangeCount = textChangeCount + 1i32;
+    }
+  };
+  let label = String("Press 0");
+  if (current !== 0i32) {
+    label = String("Press 1");
+  }
+  return <Window title="TypeNative Native Smoke">
+    <View>
+      <Text>Hello</Text>
+      <Text>
+        {
+          label}
+        </Text>
+        <Button onPress={press} elementRef={props.buttonRef}>Press</Button>
+        <TextInput placeholder="Name" onChange={change} elementRef={props.inputRef} />
+      </View>
+    </Window>;
+  }
+  function main(): i32 {
+    let inputRef = createElementRef();
+    let buttonRef = createElementRef();
+    using renderer = new NativeRenderer();
+    const factory =(): Element => <Smoke inputRef={ &inputRef} buttonRef={ &buttonRef} />;
+    if (!renderer.mountFactory(move factory)) {
+      return 1;
+    }
+    if (!renderer.isMounted() || !renderer.hasWindow()) {
+      return 2;
+    }
+    if (!inputRef.isAttached()) {
+      return 3;
+    }
+    if (!buttonRef.isAttached()) {
+      return 4;
+    }
+    const buttonIdentity = buttonRef.nodeIdentity();
+    if (buttonIdentity === undefined) {
+      return 5;
+    }
+    unsafe {
+      const windowPointer = renderer.windowHandle();
+      if (windowPointer === nullPointer<u8>()) {
+        return 6;
+      }
+      renderer.dispatchAction(buttonIdentity!);
+      if (renderer.mutationCount() === 0usize) {
+        return 7;
+      }
+      if (renderer.windowHandle() !== windowPointer) {
+        return 8;
+      }
+    }
+    if (!buttonRef.isAttached()) {
+      return 9;
+    }
+    const identity = inputRef.nodeIdentity();
+    if (identity === undefined) {
+      return 10;
+    }
+    if (!renderer.dispatchTextChange(identity!, String("typed"))) {
+      return 11;
+    }
+    unsafe {
+      if (textChangeCount !== 1i32) {
+        return 12;
+      }
+    }
+    renderer.close();
+    if (inputRef.isAttached()) {
+      return 13;
+    }
+    if (buttonRef.isAttached()) {
+      return 14;
+    }
+    return 0;
+  }

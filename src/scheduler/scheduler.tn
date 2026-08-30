@@ -1,573 +1,350 @@
-import { nullPointer, sizeOf } from "std/alloc";
 import { Array } from "std/collections";
 import { Disposable } from "std/core";
-import { Channel, channel } from "std/sync";
+import { Condition, Mutex, condition } from "std/sync";
 import { threadId } from "std/thread";
 
-declare extern "C" {
-  function tn_runtime_abort(code: u32): void;
-}
 export enum Priority {
   Immediate, UserBlocking, Normal, Low, Idle,
+}
+function priorityValue(priority: Priority): i32 {
+  return switch(priority) {
+    case Priority.Immediate: 0i32, case Priority.UserBlocking: 1i32, case Priority.Normal: 2i32, case Priority.Low: 3i32, case Priority.Idle: 4i32,
+  };
+}
+function highPriority(priority: i32): bool {
+  return priority <= 1i32;
 }
 export struct WorkItem {
   public priority: i32;
   public sequence: u64;
-  public callbackSlot: i32;
+  public callback: () => void;
+  public cancelled: bool;
 }
-class UiJob {
-  private callback: () => void;
-  public constructor(callback: () => void) {
-    this.callback = move callback;
-  }
-  public run(): void {
-    this.callback();
-  }
-}
-static mut callbackUsed0: bool = false;
-static mut callbackUsed1: bool = false;
-static mut callbackUsed2: bool = false;
-static mut callbackUsed3: bool = false;
-static mut callbackUsed4: bool = false;
-static mut callbackUsed5: bool = false;
-static mut callbackUsed6: bool = false;
-static mut callbackUsed7: bool = false;
-static mut callbackUsed8: bool = false;
-static mut callbackUsed9: bool = false;
-static mut callbackUsed10: bool = false;
-static mut callbackUsed11: bool = false;
-static mut callbackUsed12: bool = false;
-static mut callbackUsed13: bool = false;
-static mut callbackUsed14: bool = false;
-static mut callbackUsed15: bool = false;
-static mut callback0: (() => void) | undefined = undefined;
-static mut callback1: (() => void) | undefined = undefined;
-static mut callback2: (() => void) | undefined = undefined;
-static mut callback3: (() => void) | undefined = undefined;
-static mut callback4: (() => void) | undefined = undefined;
-static mut callback5: (() => void) | undefined = undefined;
-static mut callback6: (() => void) | undefined = undefined;
-static mut callback7: (() => void) | undefined = undefined;
-static mut callback8: (() => void) | undefined = undefined;
-static mut callback9: (() => void) | undefined = undefined;
-static mut callback10: (() => void) | undefined = undefined;
-static mut callback11: (() => void) | undefined = undefined;
-static mut callback12: (() => void) | undefined = undefined;
-static mut callback13: (() => void) | undefined = undefined;
-static mut callback14: (() => void) | undefined = undefined;
-static mut callback15: (() => void) | undefined = undefined;
-function nullRaw(): *mut u8 {
-  unsafe {
-    return nullPointer<u8>();
-  }
-}
-function requireOwner(owner: u64): void {
-  if (threadId() !== owner) {
-    unsafe {
-      tn_runtime_abort(96u32);
-    }
-  }
-}
-function reserveCallbackSlot(): i32 {
-  unsafe {
-    if (!callbackUsed0) {
-      callbackUsed0 = true;
-      return 0;
-    }
-    if (!callbackUsed1) {
-      callbackUsed1 = true;
-      return 1;
-    }
-    if (!callbackUsed2) {
-      callbackUsed2 = true;
-      return 2;
-    }
-    if (!callbackUsed3) {
-      callbackUsed3 = true;
-      return 3;
-    }
-    if (!callbackUsed4) {
-      callbackUsed4 = true;
-      return 4;
-    }
-    if (!callbackUsed5) {
-      callbackUsed5 = true;
-      return 5;
-    }
-    if (!callbackUsed6) {
-      callbackUsed6 = true;
-      return 6;
-    }
-    if (!callbackUsed7) {
-      callbackUsed7 = true;
-      return 7;
-    }
-    if (!callbackUsed8) {
-      callbackUsed8 = true;
-      return 8;
-    }
-    if (!callbackUsed9) {
-      callbackUsed9 = true;
-      return 9;
-    }
-    if (!callbackUsed10) {
-      callbackUsed10 = true;
-      return 10;
-    }
-    if (!callbackUsed11) {
-      callbackUsed11 = true;
-      return 11;
-    }
-    if (!callbackUsed12) {
-      callbackUsed12 = true;
-      return 12;
-    }
-    if (!callbackUsed13) {
-      callbackUsed13 = true;
-      return 13;
-    }
-    if (!callbackUsed14) {
-      callbackUsed14 = true;
-      return 14;
-    }
-    if (!callbackUsed15) {
-      callbackUsed15 = true;
-      return 15;
-    }
-  }
-  unsafe {
-    tn_runtime_abort(95u32);
-  }
-  return - 1i32;
-}
-function installCallback(slot: i32, callback: () => void): void {
-  unsafe {
-    if (slot === 0i32) {
-      callback0 = move callback;
-      return;
-    }
-    if (slot === 1i32) {
-      callback1 = move callback;
-      return;
-    }
-    if (slot === 2i32) {
-      callback2 = move callback;
-      return;
-    }
-    if (slot === 3i32) {
-      callback3 = move callback;
-      return;
-    }
-    if (slot === 4i32) {
-      callback4 = move callback;
-      return;
-    }
-    if (slot === 5i32) {
-      callback5 = move callback;
-      return;
-    }
-    if (slot === 6i32) {
-      callback6 = move callback;
-      return;
-    }
-    if (slot === 7i32) {
-      callback7 = move callback;
-      return;
-    }
-    if (slot === 8i32) {
-      callback8 = move callback;
-      return;
-    }
-    if (slot === 9i32) {
-      callback9 = move callback;
-      return;
-    }
-    if (slot === 10i32) {
-      callback10 = move callback;
-      return;
-    }
-    if (slot === 11i32) {
-      callback11 = move callback;
-      return;
-    }
-    if (slot === 12i32) {
-      callback12 = move callback;
-      return;
-    }
-    if (slot === 13i32) {
-      callback13 = move callback;
-      return;
-    }
-    if (slot === 14i32) {
-      callback14 = move callback;
-      return;
-    }
-    if (slot === 15i32) {
-      callback15 = move callback;
-    }
-  }
-}
-function invokeCallback(slot: i32): void {
-  unsafe {
-    if (slot === 0i32) {
-      callback0!();
-      return;
-    }
-    if (slot === 1i32) {
-      callback1!();
-      return;
-    }
-    if (slot === 2i32) {
-      callback2!();
-      return;
-    }
-    if (slot === 3i32) {
-      callback3!();
-      return;
-    }
-    if (slot === 4i32) {
-      callback4!();
-      return;
-    }
-    if (slot === 5i32) {
-      callback5!();
-      return;
-    }
-    if (slot === 6i32) {
-      callback6!();
-      return;
-    }
-    if (slot === 7i32) {
-      callback7!();
-      return;
-    }
-    if (slot === 8i32) {
-      callback8!();
-      return;
-    }
-    if (slot === 9i32) {
-      callback9!();
-      return;
-    }
-    if (slot === 10i32) {
-      callback10!();
-      return;
-    }
-    if (slot === 11i32) {
-      callback11!();
-      return;
-    }
-    if (slot === 12i32) {
-      callback12!();
-      return;
-    }
-    if (slot === 13i32) {
-      callback13!();
-      return;
-    }
-    if (slot === 14i32) {
-      callback14!();
-      return;
-    }
-    if (slot === 15i32) {
-      callback15!();
-    }
-  }
-}
-function releaseCallback(slot: i32): void {
-  unsafe {
-    if (slot === 0i32) {
-      callback0 = undefined;
-      callbackUsed0 = false;
-      return;
-    }
-    if (slot === 1i32) {
-      callback1 = undefined;
-      callbackUsed1 = false;
-      return;
-    }
-    if (slot === 2i32) {
-      callback2 = undefined;
-      callbackUsed2 = false;
-      return;
-    }
-    if (slot === 3i32) {
-      callback3 = undefined;
-      callbackUsed3 = false;
-      return;
-    }
-    if (slot === 4i32) {
-      callback4 = undefined;
-      callbackUsed4 = false;
-      return;
-    }
-    if (slot === 5i32) {
-      callback5 = undefined;
-      callbackUsed5 = false;
-      return;
-    }
-    if (slot === 6i32) {
-      callback6 = undefined;
-      callbackUsed6 = false;
-      return;
-    }
-    if (slot === 7i32) {
-      callback7 = undefined;
-      callbackUsed7 = false;
-      return;
-    }
-    if (slot === 8i32) {
-      callback8 = undefined;
-      callbackUsed8 = false;
-      return;
-    }
-    if (slot === 9i32) {
-      callback9 = undefined;
-      callbackUsed9 = false;
-      return;
-    }
-    if (slot === 10i32) {
-      callback10 = undefined;
-      callbackUsed10 = false;
-      return;
-    }
-    if (slot === 11i32) {
-      callback11 = undefined;
-      callbackUsed11 = false;
-      return;
-    }
-    if (slot === 12i32) {
-      callback12 = undefined;
-      callbackUsed12 = false;
-      return;
-    }
-    if (slot === 13i32) {
-      callback13 = undefined;
-      callbackUsed13 = false;
-      return;
-    }
-    if (slot === 14i32) {
-      callback14 = undefined;
-      callbackUsed14 = false;
-      return;
-    }
-    if (slot === 15i32) {
-      callback15 = undefined;
-      callbackUsed15 = false;
-    }
-  }
-}
-export class Scheduler implements Disposable {
-  private queue: Array<WorkItem>;
-  private nextSequence: u64;
-  private running: bool;
-  private ownerThread: u64;
+class WorkQueue {
+  private items: Array<WorkItem>;
   public constructor() {
-    this.queue = new Array<WorkItem>({
+    this.items = new Array<WorkItem>({
       capacity: 0usize
     });
-    this.nextSequence = 0u64;
-    this.running = false;
-    this.ownerThread = threadId();
   }
-  public schedule(callback: () => void): u64 {
-    requireOwner(this.ownerThread);
-    return this.scheduleWithPriority(Priority.Normal, move callback);
+  public push(item: WorkItem): void {
+    this.items.push(move item);
   }
-  public scheduleWithPriority(priority: Priority, callback: () => void): u64 {
-    requireOwner(this.ownerThread);
-    const slot = reserveCallbackSlot();
-    installCallback(slot, move callback);
-    const sequence = this.nextSequence;
-    this.nextSequence = this.nextSequence + 1u64;
-    this.queue.push({
-      priority: priorityValue(priority), sequence: sequence, callbackSlot: slot,
-    });
-    return sequence;
+  public count(): usize {
+    return this.items.length;
   }
-  public hasWork(): bool {
-    requireOwner(this.ownerThread);
-    return this.queue.length > 0usize;
+  public at(index: usize): &WorkItem | undefined {
+    return this.items.at(index);
   }
-  public runNext(): bool {
-    requireOwner(this.ownerThread);
-    if (this.queue.length === 0usize) {
-      return false;
-    }
-    let selected: usize = 0;
-    let index: usize = 1;
-    while (index<this.queue.length) {
-      const candidate = this.queue.at(index);
-      const current = this.queue.at(selected);
-      if (candidate !== undefined && current !== undefined) {
-        if (candidate!.priority<current!.priority ||(candidate!.priority === current!.priority && candidate!.sequence<current!.sequence)) {
-          selected = index;
-        }
-      }
-      index = index + 1usize;
-    }
-    const item = this.queue.removeAt(selected);
-    if (item === undefined) {
-      return false;
-    }
-    this.running = true;
-    invokeCallback(item!.callbackSlot);
-    releaseCallback(item!.callbackSlot);
-    this.running = false;
-    return true;
+  public atMut(index: usize): &mut WorkItem | undefined {
+    return this.items.atMut(index);
   }
-  public flush(limit: usize): usize {
-    requireOwner(this.ownerThread);
-    let count: usize = 0;
-    while (this.hasWork() && count<limit) {
-      if (!this.runNext()) {
-        break;
-      }
-      count = count + 1usize;
-    }
-    return count;
-  }
-  public isRunning(): bool {
-    requireOwner(this.ownerThread);
-    return this.running;
+  public removeAt(index: usize): WorkItem | undefined {
+    return this.items.removeAt(index);
   }
   public clear(): void {
-    requireOwner(this.ownerThread);
-    while (this.queue.length > 0usize) {
-      const item = this.queue.pop();
-      if (item !== undefined) {
-        releaseCallback(item!.callbackSlot);
-      }
-    }
-    this.running = false;
+    this.items.clear();
   }
-  public [Symbol.dispose](): void {
-    this.clear();
-  }
-  public cancel(sequence: u64): bool {
-    requireOwner(this.ownerThread);
+  public hasLive(): bool {
     let index: usize = 0;
-    while (index<this.queue.length) {
-      const item = this.queue.at(index);
-      if (item !== undefined && item!.sequence === sequence) {
-        const removed = this.queue.removeAt(index);
-        if (removed !== undefined) {
-          releaseCallback(removed!.callbackSlot);
-        }
+    while (index<this.items.length) {
+      const item = this.items.at(index);
+      if (item !== undefined && !item!.cancelled) {
         return true;
       }
       index = index + 1usize;
     }
     return false;
   }
-}
-// Cross-thread producers enqueue owned jobs through bounded, non-blocking
-// channels. Only the thread that created the scheduler may drain or dispose it.
-export class UiScheduler implements Disposable {
-  private immediate: Channel<UiJob>;
-  private userBlocking: Channel<UiJob>;
-  private normal: Channel<UiJob>;
-  private low: Channel<UiJob>;
-  private idle: Channel<UiJob>;
-  private ownerThread: u64;
-  public constructor(capacity: usize) {
-    let queueCapacity = capacity;
-    if (queueCapacity === 0usize) {
-      queueCapacity = 1usize;
+  public select(highStreak: usize): usize | undefined {
+    if (this.items.length === 0usize) {
+      return undefined;
     }
-    this.immediate = channel<UiJob>(sizeOf<UiJob>(), queueCapacity);
-    this.userBlocking = channel<UiJob>(sizeOf<UiJob>(), queueCapacity);
-    this.normal = channel<UiJob>(sizeOf<UiJob>(), queueCapacity);
-    this.low = channel<UiJob>(sizeOf<UiJob>(), queueCapacity);
-    this.idle = channel<UiJob>(sizeOf<UiJob>(), queueCapacity);
+    let selected: usize | undefined = undefined;
+    let index: usize = 0;
+    while (index<this.items.length) {
+      const candidate = this.items.at(index);
+      if (candidate !== undefined && !candidate!.cancelled) {
+        if (selected === undefined) {
+          selected = index;
+        } else {
+          const current = this.items.at(selected!);
+          if (current !== undefined) {
+            const fair = highStreak >= 8usize && highPriority(current!.priority) && !highPriority(candidate!.priority);
+            if (fair || candidate!.priority<current!.priority ||(candidate!.priority === current!.priority && candidate!.sequence<current!.sequence)) {
+              selected = index;
+            }
+          }
+        }
+      }
+      index = index + 1usize;
+    }
+    return selected;
+  }
+}
+function queueItem(queue: &mut WorkQueue, priority: i32, sequence: u64, callback: () => void): void {
+  queue.push({
+    priority: priority, sequence: sequence, callback: move callback, cancelled: false,
+  });
+}
+export class Scheduler implements Disposable {
+  private queue: Mutex<WorkQueue>;
+  private wakeup: Condition;
+  private nextSequence: u64;
+  private highStreak: usize;
+  private running: bool;
+  private closed: bool;
+  private ownerThread: u64;
+  public constructor() {
+    this.queue = new Mutex<WorkQueue>(new WorkQueue());
+    this.wakeup = condition();
+    this.nextSequence = 0u64;
+    this.highStreak = 0usize;
+    this.running = false;
+    this.closed = false;
     this.ownerThread = threadId();
+  }
+  private ownerOnly(): bool {
+    return threadId() === this.ownerThread;
   }
   public owner(): u64 {
     return this.ownerThread;
   }
-  public post(priority: Priority, callback: () => void): bool {
-    const job = new UiJob(move callback);
-    let accepted = false;
-    const priorityNumber = priorityValue(priority);
-    if (priorityNumber === 0i32) {
-      const rejected = this.immediate.trySend(move job);
-      accepted = rejected === undefined;
-    } else if (priorityNumber === 1i32) {
-      const rejected = this.userBlocking.trySend(move job);
-      accepted = rejected === undefined;
-    } else if (priorityNumber === 2i32) {
-      const rejected = this.normal.trySend(move job);
-      accepted = rejected === undefined;
-    } else if (priorityNumber === 3i32) {
-      const rejected = this.low.trySend(move job);
-      accepted = rejected === undefined;
-    } else {
-      const rejected = this.idle.trySend(move job);
-      accepted = rejected === undefined;
+  public schedule(callback: () => void): u64 {
+    return this.scheduleWithPriority(Priority.Normal, move callback);
+  }
+  public scheduleWithPriority(priority: Priority, callback: () => void): u64 {
+    using locked = this.queue.lock();
+    if (this.closed) {
+      return 0;
     }
-    return accepted;
+    const sequence = this.nextSequence;
+    this.nextSequence = this.nextSequence + 1u64;
+    queueItem(locked.getMut(), priorityValue(priority), sequence, move callback);
+    this.wakeup.signal();
+    return sequence;
+  }
+  public hasWork(): bool {
+    using locked = this.queue.lock();
+    return locked.getMut().hasLive();
+  }
+  public waitForWork(): bool {
+    using locked = this.queue.lock();
+    while (!this.closed && !locked.getMut().hasLive()) {
+      unsafe {
+        this.wakeup.wait(this.queue.rawHandle());
+      }
+    }
+    return !this.closed && locked.getMut().hasLive();
+  }
+  public runNext(): bool {
+    if (!this.ownerOnly()) {
+      return false;
+    }
+    let item: WorkItem | undefined = undefined;
+    {
+      using locked = this.queue.lock();
+      const selected = locked.getMut().select(this.highStreak);
+      if (selected === undefined) {
+        return false;
+      }
+      item = locked.getMut().removeAt(selected!);
+      if (item !== undefined) {
+        if (highPriority(item!.priority)) {
+          this.highStreak = this.highStreak + 1usize;
+        } else {
+          this.highStreak = 0usize;
+        }
+        this.running = true;
+      }
+    }
+    if (item === undefined) {
+      return false;
+    }
+    if (!item!.cancelled) {
+      item!.callback();
+    }
+    this.running = false;
+    return true;
+  }
+  public flush(limit: usize): usize {
+    if (!this.ownerOnly()) {
+      return 0;
+    }
+    let count: usize = 0;
+    while (count<limit && this.runNext()) {
+      count = count + 1usize;
+    }
+    return count;
+  }
+  public isRunning(): bool {
+    return this.running;
+  }
+  public cancel(sequence: u64): bool {
+    using locked = this.queue.lock();
+    let index: usize = 0;
+    while (index<locked.getMut().count()) {
+      const item = locked.getMut().atMut(index);
+      if (item !== undefined && item!.sequence === sequence && !item!.cancelled) {
+        item!.cancelled = true;
+        locked.getMut().removeAt(index);
+        return true;
+      }
+      index = index + 1usize;
+    }
+    return false;
+  }
+  public pendingCount(): usize {
+    using locked = this.queue.lock();
+    let count: usize = 0;
+    let index: usize = 0;
+    while (index<locked.getMut().count()) {
+      const item = locked.getMut().at(index);
+      if (item !== undefined && !item!.cancelled) {
+        count = count + 1usize;
+      }
+      index = index + 1usize;
+    }
+    return count;
+  }
+  public clear(): void {
+    if (!this.ownerOnly()) {
+      return;
+    }
+    using locked = this.queue.lock();
+    locked.getMut().clear();
+    this.running = false;
+  }
+  public close(): void {
+    if (!this.ownerOnly()) {
+      return;
+    }
+    using locked = this.queue.lock();
+    if (!this.closed) {
+      this.closed = true;
+      locked.getMut().clear();
+      this.wakeup.broadcast();
+    }
+  }
+  public [Symbol.dispose](): void {
+    this.close();
+  }
+}
+export class UiScheduler implements Disposable {
+  private queue: Mutex<WorkQueue>;
+  private wakeup: Condition;
+  private nextSequence: u64;
+  private highStreak: usize;
+  private closed: bool;
+  private ownerThread: u64;
+  public constructor() {
+    this.queue = new Mutex<WorkQueue>(new WorkQueue());
+    this.wakeup = condition();
+    this.nextSequence = 0u64;
+    this.highStreak = 0usize;
+    this.closed = false;
+    this.ownerThread = threadId();
+  }
+  private ownerOnly(): bool {
+    return threadId() === this.ownerThread;
+  }
+  public owner(): u64 {
+    return this.ownerThread;
+  }
+  public post(priority: Priority, callback: () => void): u64 | undefined {
+    using locked = this.queue.lock();
+    if (this.closed) {
+      return undefined;
+    }
+    const sequence = this.nextSequence;
+    this.nextSequence = this.nextSequence + 1u64;
+    locked.getMut().push({
+      priority: priorityValue(priority), sequence: sequence, callback: move callback, cancelled: false,
+    });
+    this.wakeup.signal();
+    return sequence;
+  }
+  public cancel(sequence: u64): bool {
+    using locked = this.queue.lock();
+    let index: usize = 0;
+    while (index<locked.getMut().count()) {
+      const item = locked.getMut().atMut(index);
+      if (item !== undefined && item!.sequence === sequence && !item!.cancelled) {
+        item!.cancelled = true;
+        locked.getMut().removeAt(index);
+        return true;
+      }
+      index = index + 1usize;
+    }
+    return false;
+  }
+  public waitForWork(): bool {
+    using locked = this.queue.lock();
+    while (!this.closed && !locked.getMut().hasLive()) {
+      unsafe {
+        this.wakeup.wait(this.queue.rawHandle());
+      }
+    }
+    return !this.closed && locked.getMut().hasLive();
   }
   public drain(limit: usize): usize {
-    requireOwner(this.ownerThread);
+    if (!this.ownerOnly()) {
+      return 0;
+    }
     let count: usize = 0;
     while (count<limit) {
-      let ran = false;
-      const immediate = this.immediate.tryReceive();
-      if (immediate !== undefined) {
-        immediate!.run();
+      let job: WorkItem | undefined = undefined;
+      {
+        using locked = this.queue.lock();
+        const selected = locked.getMut().select(this.highStreak);
+        if (selected === undefined) {
+          break;
+        }
+        job = locked.getMut().removeAt(selected!);
+        if (job !== undefined) {
+          if (highPriority(job!.priority)) {
+            this.highStreak = this.highStreak + 1usize;
+          } else {
+            this.highStreak = 0usize;
+          }
+        }
+      }
+      if (job !== undefined) {
+        if (!job!.cancelled) {
+          job!.callback();
+        }
         count = count + 1usize;
-        ran = true;
-      }
-      if (!ran) {
-        const userBlocking = this.userBlocking.tryReceive();
-        if (userBlocking !== undefined) {
-          userBlocking!.run();
-          count = count + 1usize;
-          ran = true;
-        }
-      }
-      if (!ran) {
-        const normal = this.normal.tryReceive();
-        if (normal !== undefined) {
-          normal!.run();
-          count = count + 1usize;
-          ran = true;
-        }
-      }
-      if (!ran) {
-        const low = this.low.tryReceive();
-        if (low !== undefined) {
-          low!.run();
-          count = count + 1usize;
-          ran = true;
-        }
-      }
-      if (!ran) {
-        const idle = this.idle.tryReceive();
-        if (idle !== undefined) {
-          idle!.run();
-          count = count + 1usize;
-          ran = true;
-        }
-      }
-      if (!ran) {
-        break;
       }
     }
     return count;
   }
-  public [Symbol.dispose](): void {
-    this.immediate.destroy();
-    this.userBlocking.destroy();
-    this.normal.destroy();
-    this.low.destroy();
-    this.idle.destroy();
+  public pendingCount(): usize {
+    using locked = this.queue.lock();
+    let count: usize = 0;
+    let index: usize = 0;
+    while (index<locked.getMut().count()) {
+      const job = locked.getMut().at(index);
+      if (job !== undefined && !job!.cancelled) {
+        count = count + 1usize;
+      }
+      index = index + 1usize;
+    }
+    return count;
   }
-}
-function priorityValue(priority: Priority): i32 {
-  return switch(priority) {
-    case Priority.Immediate: 0i32, case Priority.UserBlocking: 1i32, case Priority.Normal: 2i32, case Priority.Low: 3i32, case Priority.Idle: 4i32,
-  };
+  public close(): void {
+    if (!this.ownerOnly()) {
+      return;
+    }
+    using locked = this.queue.lock();
+    if (!this.closed) {
+      this.closed = true;
+      locked.getMut().clear();
+      this.wakeup.broadcast();
+    }
+  }
+  public [Symbol.dispose](): void {
+    this.close();
+  }
 }
 export function schedule(scheduler: Scheduler, callback: () => void): u64 {
   return scheduler.schedule(move callback);

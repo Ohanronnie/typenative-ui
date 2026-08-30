@@ -6,22 +6,23 @@ entry path, target, JSX runtime, and external libraries are explicit.
 
 ## Fixture coverage
 
-| Fixture                          | Contract                                                                |
-| -------------------------------- | ----------------------------------------------------------------------- |
-| `testing/typenative.json`        | JSX ownership and component resolution                                  |
-| `testing/button/typenative.json` | JSX button children and action dispatch                                 |
-| `testing/headless-events`        | Headless mount, accessibility, focus, input, update, and unmount        |
-| `testing/hooks-integration`      | State, reducer, context, ref, ID, memo, callback, effects, and batching |
-| `testing/component-identity`     | Callable identity, keyed state retention, replacement, and key reset    |
-| `testing/refs`                   | Host reference attach/current/detach lifecycle                          |
-| `testing/lifecycle`              | Deep disposal, repeated mount/unmount, and effect cleanup               |
-| `testing/reconciler`             | Keyed reverse moves, unchanged trees, text updates, and replacement     |
-| `testing/layout`                 | Yoga row direction, padding, gap, and computed frames                   |
-| `testing/style`                  | Style fields, edge insets, revisions, and snapshots                     |
-| `testing/scheduler`              | Priority order, cancellation, owner-thread drain, and bounded UI posts  |
-| `testing/async`                  | Task-group completion, cancellation, and cleanup                        |
-| `testing/multi`                  | Multiple JSX component children and fragment flattening                 |
-| `testing/public-api`             | Public entrypoint aliases and renderer/scheduler factories              |
+| Fixture                          | Contract                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------- |
+| `testing/typenative.json`        | JSX ownership and component resolution                                    |
+| `testing/button/typenative.json` | JSX button children and action dispatch                                   |
+| `testing/headless-events`        | Headless mount, accessibility, focus, input, update, and unmount          |
+| `testing/hooks-integration`      | State, reducer, context, ref, ID, memo, callback, effects, and batching   |
+| `testing/component-identity`     | Callable identity, keyed state retention, replacement, and key reset      |
+| `testing/refs`                   | Host reference attach/current/detach lifecycle                            |
+| `testing/lifecycle`              | Deep disposal, repeated mount/unmount, and effect cleanup                 |
+| `testing/reconciler`             | Keyed reverse moves, unchanged trees, text updates, and replacement       |
+| `testing/layout`                 | Yoga row direction, padding, gap, and computed frames                     |
+| `testing/style`                  | Style fields, edge insets, revisions, and snapshots                       |
+| `testing/scheduler`              | Priority order, cancellation, owner-thread drain, dynamic UI posts, and wakeups |
+| `testing/async`                  | Task-group completion, cancellation, and cleanup                          |
+| `testing/multi`                  | Multiple JSX component children and fragment flattening                   |
+| `testing/public-api`             | Public entrypoint aliases and renderer/scheduler factories                |
+| `testing/native-renderer`        | macOS AppKit mount, state update, button/input events, refs, and teardown |
 
 ## Verification command
 
@@ -34,18 +35,17 @@ The script performs these stages:
 
 1. TypeNative formatting, checking, linting, and compiler-boundary validation.
 2. Yoga archive verification and external CMake build.
-3. AddressSanitizer debug runs for every fixture and native Workbench run.
-4. Optimized runs for every fixture and native Workbench run.
+3. AddressSanitizer debug runs for every fixture and the deterministic macOS native renderer smoke test.
+4. Optimized runs for every fixture and the deterministic macOS native renderer smoke test.
 5. UndefinedBehaviorSanitizer and ThreadSanitizer runs for the scheduler and
    headless paths.
 6. The 10,000-key reconciler benchmark with mutation-count gates, allocation
    count, wall time, and maximum resident memory.
 
-Hook storage intentionally remains reachable for the process lifetime so a
-later render can reuse the same slot store. Hook and AppKit runs therefore use
-AddressSanitizer's invalid-access checks with leak reporting disabled; the
-channel validation and non-hook ownership fixtures run leak detection where
-the platform has no global framework caches.
+Hook storage is owned by a renderer's `HookRoot` and is cleared on unmount.
+Hook and AppKit runs therefore use AddressSanitizer's invalid-access checks;
+the non-hook ownership fixtures also run leak detection where the platform has
+no AppKit-owned process caches.
 
 ## Reconciler benchmark
 
