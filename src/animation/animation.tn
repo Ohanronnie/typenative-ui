@@ -1,4 +1,6 @@
+import { u64ToUsize, usizeToF32 } from "std/alloc";
 import { Array } from "std/collections";
+
 export enum Easing {
   Linear, EaseIn, EaseOut, EaseInOut,
 }
@@ -8,9 +10,10 @@ export class Animation {
   private duration: f64;
   private elapsed: f64;
   private current: f64;
-  private easing: i32;
+  private easing: Easing;
   private running: bool;
-  public constructor(startValue: f64, endValue: f64, duration: f64, easing: i32) {
+  private update?: (f64) => void;
+  public constructor(startValue: f64, endValue: f64, duration: f64, easing: Easing) {
     this.startValue = startValue;
     this.endValue = endValue;
     this.duration = duration;
@@ -18,6 +21,7 @@ export class Animation {
     this.current = startValue;
     this.easing = easing;
     this.running = false;
+    this.update = undefined;
   }
   public start(): void {
     this.elapsed = 0.0;
@@ -26,6 +30,12 @@ export class Animation {
   }
   public stop(): void {
     this.running = false;
+  }
+  public setUpdate(callback: (f64) => void): void {
+    this.update = move callback;
+  }
+  public clearUpdate(): void {
+    this.update = undefined;
   }
   public tick(delta: f64): bool {
     if (!this.running) {
@@ -42,6 +52,9 @@ export class Animation {
     }
     const eased = ease(progress, this.easing);
     this.current = this.startValue +(this.endValue - this.startValue) * eased;
+    if (this.update !== undefined) {
+      this.update!(this.current);
+    }
     return true;
   }
   public value(): f64 {
@@ -53,10 +66,12 @@ export class Animation {
 }
 export class Animator {
   private animations: Array<Animation>;
+  private lastTimestampNanoseconds: u64;
   public constructor() {
     this.animations = new Array<Animation>({
       capacity: 0
     });
+    this.lastTimestampNanoseconds = 0u64;
   }
   public add(animation: Animation): void {
     this.animations.push(move animation);
@@ -76,19 +91,52 @@ export class Animator {
   public count(): usize {
     return this.animations.length;
   }
-}
-function ease(progress: f64, easing: i32): f64 {
-  if (easing === 1i32) {
-    return progress * progress;
-  }
-  if (easing === 2i32) {
-    return 1.0 -(1.0 - progress) *(1.0 - progress);
-  }
-  if (easing === 3i32) {
-    if (progress<0.5) {
-      return 2.0 * progress * progress;
+  public hasRunning(): bool {
+    let index: usize = 0;
+    while (index<this.animations.length) {
+      const animation = this.animations.at(index);
+      if (animation !== undefined && animation!.isRunning()) {
+        return true;
+      }
+      index = index + 1usize;
     }
-    return 1.0 -(( - 2.0 * progress + 2.0) *( - 2.0 * progress + 2.0)) / 2.0;
+    return false;
   }
-  return progress;
+  public clear(): void {
+    let index: usize = 0;
+    while (index<this.animations.length) {
+      const animation = this.animations.atMut(index);
+      if (animation !== undefined) {
+        animation!.stop();
+        animation!.clearUpdate();
+      }
+      index = index + 1usize;
+    }
+    this.animations.clear();
+    this.resetClock();
+  }
+  public resetClock(): void {
+    this.lastTimestampNanoseconds = 0u64;
+  }
+  public advance(timestampNanoseconds: u64): bool {
+    let deltaNanoseconds = 0u64;
+    if (this.lastTimestampNanoseconds !== 0u64 && timestampNanoseconds >= this.lastTimestampNanoseconds) {
+      deltaNanoseconds = timestampNanoseconds - this.lastTimestampNanoseconds;
+    }
+    this.lastTimestampNanoseconds = timestampNanoseconds;
+    const deltaSeconds = usizeToF32(u64ToUsize(deltaNanoseconds))as f64 / 1000000000.0;
+    this.tick(deltaSeconds);
+    return this.hasRunning();
+  }
+}
+function ease(progress: f64, easing: Easing): f64 {
+  return switch(easing) {
+    case Easing.Linear: progress, case Easing.EaseIn: progress * progress, case Easing.EaseOut: 1.0 -(1.0 - progress) *(1.0 - progress), case Easing.EaseInOut: easeInOut(progress),
+  };
+}
+function easeInOut(progress: f64): f64 {
+  if (progress<0.5) {
+    return 2.0 * progress * progress;
+  }
+  return 1.0 -(( - 2.0 * progress + 2.0) *( - 2.0 * progress + 2.0)) / 2.0;
 }

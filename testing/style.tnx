@@ -1,13 +1,14 @@
 import { Text, styledView } from "../src/components";
-import { EmptyProps, Style, styleSetHeight, styleSetPadding, styleSetWidth } from "../src/core/types";
+import { EmptyProps, Style, points, styleSetHeight, styleSetPadding, styleSetWidth } from "../src/core/types";
 import { HeadlessRenderer } from "../src/renderer/headless";
 import { Element, hostChildAt } from "../src/tnx-runtime";
+import { lengthEquals } from "../src/tnx-runtime";
 
 function Root(props: EmptyProps): Element {
   const style = new Style();
-  styleSetWidth( &mut style, 120.0f32);
-  styleSetHeight( &mut style, 80.0f32);
-  styleSetPadding( &mut style, 4.0f32);
+  styleSetWidth( &mut style, points(120.0f32));
+  styleSetHeight( &mut style, points(80.0f32));
+  styleSetPadding( &mut style, points(4.0f32));
   const child = Text({
     children: "ok",
   });
@@ -18,7 +19,11 @@ function main(): i32 {
   renderer.mount(<Root />);
   const root = renderer.rootElement();
   const content = hostChildAt(root, 0usize);
-  if (!root.hasStyle() || root.style().width !== 120.0f32 || root.style().height !== 80.0f32 || root.style().padding !== 4.0f32) {
+  const actual = root.style();
+  const expectedWidth = points(120.0f32);
+  const expectedHeight = points(80.0f32);
+  const expectedPadding = points(4.0f32);
+  if (!root.hasStyle() || !lengthEquals( &actual.width, &expectedWidth) || !lengthEquals( &actual.height, &expectedHeight) || !lengthEquals( &actual.padding, &expectedPadding)) {
     renderer.unmount();
     return 10;
   }

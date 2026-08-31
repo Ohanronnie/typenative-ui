@@ -1,18 +1,22 @@
 import { Array } from "std/collections";
-export enum AccessibilityRole {
-  None, Window, Group, StaticText, Button, Image, TextField, List,
-}
+import { String } from "std/string";
+import { AccessibilityRole } from "../tnx-runtime";
+
 export class AccessibilityNode {
-  public role: i32;
-  public label: &str;
+  public role: AccessibilityRole;
+  public label: string;
   public enabled: bool;
   public selected: bool;
+  public focused: bool;
+  public value: string;
   public children: Array<AccessibilityNode>;
-  public constructor(role: i32, label: &str) {
+  public constructor(role: AccessibilityRole, label: string) {
     this.role = role;
-    this.label = label;
+    this.label = move label;
     this.enabled = true;
     this.selected = false;
+    this.focused = false;
+    this.value = String("");
     this.children = new Array<AccessibilityNode>({
       capacity: 0
     });
@@ -29,6 +33,12 @@ export class AccessibilityNode {
   public setSelected(value: bool): void {
     this.selected = value;
   }
+  public setFocused(value: bool): void {
+    this.focused = value;
+  }
+  public setValue(value: string): void {
+    this.value = move value;
+  }
 }
 export class AccessibilityTree {
   public root: AccessibilityNode;
@@ -36,6 +46,6 @@ export class AccessibilityTree {
     this.root = move root;
   }
 }
-export function accessibilityNode(role: i32, label: &str): AccessibilityNode {
-  return new AccessibilityNode(role, label);
+export function accessibilityNode(role: AccessibilityRole, label: &str): AccessibilityNode {
+  return new AccessibilityNode(role, String(label));
 }

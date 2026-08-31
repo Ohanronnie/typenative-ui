@@ -1,6 +1,9 @@
 import { Array } from "std/collections";
+import { Equal } from "std/core";
+import { AccessibilityNode as RuntimeAccessibilityNode, AccessibilityTree as RuntimeAccessibilityTree, accessibilityNode as runtimeAccessibilityNode } from "./accessibility/accessibility";
+import { Animation as RuntimeAnimation, Animator as RuntimeAnimator, Easing as RuntimeEasing } from "./animation/animation";
 import { Button as NativeButton, Canvas as NativeCanvas, Dialog as NativeDialog, Grid as NativeGrid, Image as NativeImage, List as NativeList, Menu as NativeMenu, Progress as NativeProgress, ScrollView as NativeScrollView, Slider as NativeSlider, SplitView as NativeSplitView, Stack as NativeStack, Switch as NativeSwitch, Text as NativeText, TextInput as NativeTextInput, Toolbar as NativeToolbar, View as NativeView, Window as NativeWindowComponent } from "./components";
-import { ButtonProps as CoreButtonProps, CanvasProps as CoreCanvasProps, DialogProps as CoreDialogProps, GridProps as CoreGridProps, ImageProps as CoreImageProps, ListProps as CoreListProps, MenuProps as CoreMenuProps, ProgressProps as CoreProgressProps, ScrollViewProps as CoreScrollViewProps, SliderProps as CoreSliderProps, SplitViewProps as CoreSplitViewProps, StackProps as CoreStackProps, Style as CoreStyle, SwitchProps as CoreSwitchProps, TextInputProps as CoreTextInputProps, TextProps as CoreTextProps, ToolbarProps as CoreToolbarProps, ViewProps as CoreViewProps, WindowProps as CoreWindowProps } from "./core/types";
+import { AccessibilityRole as CoreAccessibilityRole, Align as CoreAlign, auto as coreAuto, ButtonProps as CoreButtonProps, CanvasProps as CoreCanvasProps, DialogProps as CoreDialogProps, Display as CoreDisplay, FlexDirection as CoreFlexDirection, GridProps as CoreGridProps, ImageProps as CoreImageProps, Justify as CoreJustify, KeyboardType as CoreKeyboardType, Length as CoreLength, ListProps as CoreListProps, MenuProps as CoreMenuProps, Overflow as CoreOverflow, percent as corePercent, points as corePoints, PositionType as CorePositionType, ProgressProps as CoreProgressProps, ScrollViewProps as CoreScrollViewProps, SliderProps as CoreSliderProps, SplitViewProps as CoreSplitViewProps, StackProps as CoreStackProps, Style as CoreStyle, SwitchProps as CoreSwitchProps, TextInputProps as CoreTextInputProps, TextProps as CoreTextProps, TextSelection as CoreTextSelection, ToolbarProps as CoreToolbarProps, ViewProps as CoreViewProps, WindowClosePolicy as CoreWindowClosePolicy, WindowProps as CoreWindowProps } from "./core/types";
 import { batch as hookBatch, Context as HookContext, Cleanup, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor, useCallback as hookUseCallback, useContext as hookUseContext, useDeferredValue as hookUseDeferredValue, useEffect as hookUseEffect, useId as hookUseId, useLayoutEffect as hookUseLayoutEffect, useMemo as hookUseMemo, useReducer as hookUseReducer, useRef as hookUseRef, useState as hookUseState, useSyncExternalStore as hookUseSyncExternalStore, useTransition as hookUseTransition, StatePair as HookStatePair, ReducerPair as HookReducerPair, Ref as HookRef, Transition as HookTransition } from "./hooks/hooks";
 import { NativeRenderer as RuntimeNativeRenderer, createNativeRenderer as runtimeCreateNativeRenderer, runApp as runtimeRunApp } from "./platform/macos";
 import { Reconciler as RuntimeReconciler } from "./reconciler/reconciler";
@@ -20,6 +23,34 @@ export function createElementRef(): ElementRef {
 }
 export type Key = RuntimeKey;
 export type Style = CoreStyle;
+export type Length = CoreLength;
+export type FlexDirection = CoreFlexDirection;
+export type Align = CoreAlign;
+export type Display = CoreDisplay;
+export type PositionType = CorePositionType;
+export type Justify = CoreJustify;
+export type Overflow = CoreOverflow;
+export type AccessibilityRole = CoreAccessibilityRole;
+export type AccessibilityNode = RuntimeAccessibilityNode;
+export type AccessibilityTree = RuntimeAccessibilityTree;
+export type Animation = RuntimeAnimation;
+export type Animator = RuntimeAnimator;
+export type Easing = RuntimeEasing;
+export type KeyboardType = CoreKeyboardType;
+export type TextSelection = CoreTextSelection;
+export type WindowClosePolicy = CoreWindowClosePolicy;
+export function auto(): Length {
+  return coreAuto();
+}
+export function points(value: f32): Length {
+  return corePoints(value);
+}
+export function percent(value: f32): Length {
+  return corePercent(value);
+}
+export function accessibilityNode(role: AccessibilityRole, label: &str): AccessibilityNode {
+  return runtimeAccessibilityNode(role, label);
+}
 export type ButtonProps = CoreButtonProps;
 export type TextProps = CoreTextProps;
 export type TextInputProps = CoreTextInputProps;
@@ -107,17 +138,17 @@ export function useState<T>(initial: T): State<T> {
 export function useReducer<StateValue, Action>(reducer: (StateValue, Action) => StateValue, initial: StateValue): ReducerState<StateValue, Action> {
   return hookUseReducer<StateValue, Action>(reducer, move initial);
 }
-export function useEffect(effect: () => Cleanup, dependencies: Array<u64 >): void {
-  hookUseEffect(move effect, move dependencies);
+export function useEffect<T extends Equal<T> >(effect: () => Cleanup, dependencies: Array<T >): void {
+  hookUseEffect<T>(move effect, move dependencies);
 }
-export function useLayoutEffect(effect: () => Cleanup, dependencies: Array<u64 >): void {
-  hookUseLayoutEffect(move effect, move dependencies);
+export function useLayoutEffect<T extends Equal<T> >(effect: () => Cleanup, dependencies: Array<T >): void {
+  hookUseLayoutEffect<T>(move effect, move dependencies);
 }
-export function useMemo<T>(factory: () => T, dependencies: Array<u64 >): T {
-  return hookUseMemo<T>(move factory, move dependencies);
+export function useMemo<T, Dependency extends Equal<Dependency> >(factory: () => T, dependencies: Array<Dependency >): T {
+  return hookUseMemo<T, Dependency>(move factory, move dependencies);
 }
-export function useCallback<T>(callback: T, dependencies: Array<u64 >): T {
-  return hookUseCallback<T>(move callback, move dependencies);
+export function useCallback<T, Dependency extends Equal<Dependency> >(callback: T, dependencies: Array<Dependency >): T {
+  return hookUseCallback<T, Dependency>(move callback, move dependencies);
 }
 export function useRef<T>(initial: T): Ref<T> {
   return hookUseRef<T>(move initial);

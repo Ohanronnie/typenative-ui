@@ -1,12 +1,13 @@
 import { Array } from "std/collections";
 import { Disposable } from "std/core";
 import { beginBatchFor, beginComponent, beginHookPassFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor } from "../hooks/hooks";
-import { Element, hostChildAt, hostChildCount, hostSetChild, kindFunction, kindImage, kindProgress, kindSlider, kindSwitch, kindTextInput, leaf, StyleSnapshot } from "../tnx-runtime";
+import { accessibilityRoleCode, alignCode, displayCode, Element, flexDirectionCode, hostChildAt, hostChildCount, hostSetChild, justifyCode, kindFunction, kindImage, kindProgress, kindSlider, kindSwitch, kindTextInput, leaf, lengthEquals, overflowCode, positionTypeCode, StyleSnapshot } from "../tnx-runtime";
 import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "./mutations";
 
 struct MountedNode {
   public id: i32;
   public identity: u64;
+  public parentId: i32 | undefined;
   public active: bool;
   public kind: i32;
   public typeId: u64;
@@ -17,7 +18,7 @@ function parentNode(id: i32): i32 | undefined {
 }
 function newMountedNode(id: i32, identity: u64, element: &Element): MountedNode {
   return {
-    id: id, identity: identity, active: true, kind: element.kind(), typeId: element.typeId(), children: new Array<i32>({
+    id: id, identity: identity, parentId: undefined, active: true, kind: element.kind(), typeId: element.typeId(), children: new Array<i32>({
       capacity: 0usize
     }),
   };
@@ -26,19 +27,22 @@ function sameElement(previous: &Element, next: &Element): bool {
   if (previous.kind() !== next.kind() || previous.typeId() !== next.typeId() || !previous.keyEquals(next)) {
     return false;
   }
+  if (previous.kind() === kindTextInput() && previous.isMultiline() !== next.isMultiline()) {
+    return false;
+  }
   if (previous.isComponent() || next.isComponent()) {
     return previous.sameComponent(next);
   }
   return true;
 }
 function sameStyle(left: &StyleSnapshot, right: &StyleSnapshot): bool {
-  return left.width === right.width && left.height === right.height && left.minWidth === right.minWidth && left.minHeight === right.minHeight && left.maxWidth === right.maxWidth && left.maxHeight === right.maxHeight && left.margin === right.margin && left.padding === right.padding && left.marginTop === right.marginTop && left.marginRight === right.marginRight && left.marginBottom === right.marginBottom && left.marginLeft === right.marginLeft && left.paddingTop === right.paddingTop && left.paddingRight === right.paddingRight && left.paddingBottom === right.paddingBottom && left.paddingLeft === right.paddingLeft && left.gap === right.gap && left.flex === right.flex && left.flexGrow === right.flexGrow && left.flexShrink === right.flexShrink && left.flexBasis === right.flexBasis && left.flexDirection === right.flexDirection && left.alignItems === right.alignItems && left.alignSelf === right.alignSelf && left.justifyContent === right.justifyContent && left.positionType === right.positionType && left.insetTop === right.insetTop && left.insetRight === right.insetRight && left.insetBottom === right.insetBottom && left.insetLeft === right.insetLeft && left.display === right.display && left.overflow === right.overflow && left.aspectRatio === right.aspectRatio && left.hasMarginEdges === right.hasMarginEdges && left.hasPaddingEdges === right.hasPaddingEdges;
+  return lengthEquals( &left.width, &right.width) && lengthEquals( &left.height, &right.height) && lengthEquals( &left.minWidth, &right.minWidth) && lengthEquals( &left.minHeight, &right.minHeight) && lengthEquals( &left.maxWidth, &right.maxWidth) && lengthEquals( &left.maxHeight, &right.maxHeight) && lengthEquals( &left.margin, &right.margin) && lengthEquals( &left.padding, &right.padding) && lengthEquals( &left.marginTop, &right.marginTop) && lengthEquals( &left.marginRight, &right.marginRight) && lengthEquals( &left.marginBottom, &right.marginBottom) && lengthEquals( &left.marginLeft, &right.marginLeft) && lengthEquals( &left.paddingTop, &right.paddingTop) && lengthEquals( &left.paddingRight, &right.paddingRight) && lengthEquals( &left.paddingBottom, &right.paddingBottom) && lengthEquals( &left.paddingLeft, &right.paddingLeft) && lengthEquals( &left.gap, &right.gap) && left.flex === right.flex && left.flexGrow === right.flexGrow && left.flexShrink === right.flexShrink && lengthEquals( &left.flexBasis, &right.flexBasis) && flexDirectionCode( &left.flexDirection) === flexDirectionCode( &right.flexDirection) && alignCode( &left.alignItems) === alignCode( &right.alignItems) && alignCode( &left.alignSelf) === alignCode( &right.alignSelf) && justifyCode( &left.justifyContent) === justifyCode( &right.justifyContent) && positionTypeCode( &left.positionType) === positionTypeCode( &right.positionType) && lengthEquals( &left.insetTop, &right.insetTop) && lengthEquals( &left.insetRight, &right.insetRight) && lengthEquals( &left.insetBottom, &right.insetBottom) && lengthEquals( &left.insetLeft, &right.insetLeft) && displayCode( &left.display) === displayCode( &right.display) && overflowCode( &left.overflow) === overflowCode( &right.overflow) && left.aspectRatio === right.aspectRatio && left.hasMarginEdges === right.hasMarginEdges && left.hasPaddingEdges === right.hasPaddingEdges;
 }
 function elementChanged(previous: &Element, next: &Element): bool {
-  if (!previous.textEquals(next) || previous.hasStyle() !== next.hasStyle() ||(previous.hasStyle() && !sameStyle( &previous.style(), &next.style())) || previous.accessibilityRole() !== next.accessibilityRole() || previous.accessibilityEnabled() !== next.accessibilityEnabled() || !previous.accessibilityLabelEquals(next) || previous.selected() !== next.selected()) {
+  if (!previous.textEquals(next) || previous.hasStyle() !== next.hasStyle() ||(previous.hasStyle() && !sameStyle( &previous.style(), &next.style())) || accessibilityRoleCode( &previous.accessibilityRole()) !== accessibilityRoleCode( &next.accessibilityRole()) || previous.accessibilityEnabled() !== next.accessibilityEnabled() || !previous.accessibilityLabelEquals(next) || previous.selected() !== next.selected()) {
     return true;
   }
-  if (previous.kind() === kindTextInput() &&(!previous.valueEquals(next) || !previous.placeholderEquals(next) || previous.hasSelection() !== next.hasSelection() ||(previous.hasSelection() &&(previous.selectionStart() !== next.selectionStart() || previous.selectionEnd() !== next.selectionEnd())))) {
+  if (previous.kind() === kindTextInput() &&(!previous.valueEquals(next) || !previous.placeholderEquals(next) || previous.hasSelection() !== next.hasSelection() ||(previous.hasSelection() &&(previous.selectionStart() !== next.selectionStart() || previous.selectionEnd() !== next.selectionEnd())) || previous.isControlled() !== next.isControlled() || previous.isEditable() !== next.isEditable() || previous.autoFocus() !== next.autoFocus() || previous.keyboardTypeCode() !== next.keyboardTypeCode())) {
     return true;
   }
   if (previous.kind() === kindImage() && !previous.imageSourceEquals(next)) {
@@ -94,6 +98,12 @@ function nodeChildId(nodes: &Array<MountedNode>, id: i32, index: usize): i32 | u
     return *(value!);
   }
 }
+function setNodeParent(nodes: &mut Array<MountedNode>, id: i32, parent: i32 | undefined): void {
+  const node = nodeAtMut(nodes, id);
+  if (node !== undefined) {
+    node!.parentId = parent;
+  }
+}
 function usedAt(values: &Array<u8>, index: usize): bool {
   const value = values.at(index);
   if (value === undefined) {
@@ -128,6 +138,17 @@ function setFocusedInTree(element: &Element, identity: u64): bool {
     index = index + 1usize;
   }
   return found;
+}
+function clearFocusedInTree(element: &Element): void {
+  element.setFocused(false);
+  let index: usize = 0;
+  while (index<hostChildCount(element)) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined) {
+      clearFocusedInTree(child!);
+    }
+    index = index + 1usize;
+  }
 }
 function duplicateKeyCountInTree(element: &Element): usize {
   let count: usize = 0;
@@ -301,9 +322,10 @@ export class Reconciler implements Disposable {
     }
     element.setMountIdentity(identity!, this.treeGeneration);
     element.attachReference(identity!, this.treeGeneration);
+    setNodeParent( &mut this.nodes, id, parent);
     if (emit) {
       this.mutations.push({
-        kind: mutationCreate(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
+        kind: mutationCreate(), nodeId: id, replacementId: undefined, parentId: parent, fromIndex: index, toIndex: index,
       });
     }
     let childIndex: usize = 0;
@@ -317,60 +339,51 @@ export class Reconciler implements Disposable {
     }
     return id;
   }
-  private replaceSubtree(id: i32, element: &Element, parent: i32 | undefined, index: usize): void {
-    const identity = nodeIdentity( &this.nodes, id);
-    if (identity === undefined) {
-      return;
-    }
-    element.setMountIdentity(identity!, this.treeGeneration);
-    element.attachReference(identity!, this.treeGeneration);
-    let childIndex: usize = 0;
-    while (true) {
-      const child = nodeChildId( &this.nodes, id, childIndex);
-      if (child === undefined) {
-        break;
-      }
-      deactivateSubtree( &mut this.nodes, child!);
-      childIndex = childIndex + 1usize;
-    }
-    const node = nodeAtMut( &mut this.nodes, id);
-    if (node !== undefined) {
-      node!.active = true;
-      node!.kind = element.kind();
-      node!.typeId = element.typeId();
-      node!.children.clear();
-    }
-    let nextIndex: usize = 0;
-    while (nextIndex<hostChildCount(element)) {
-      const child = hostChildAt(element, nextIndex);
-      if (child !== undefined) {
-        const childId = this.snapshot(child!, parentNode(id), nextIndex, true);
-        this.appendChild(id, childId);
-      }
-      nextIndex = nextIndex + 1usize;
-    }
+  private replaceSubtree(id: i32, element: &Element, parent: i32 | undefined, index: usize): i32 {
+    const replacementId = this.snapshot(element, parent, index, false);
+    deactivateSubtree( &mut this.nodes, id);
+    return replacementId;
   }
-  private diffNode(previous: &Element, next: &Element, id: i32, parent: i32 | undefined, index: usize): void {
+  private replaceNode(previous: &Element, next: &Element, id: i32, parent: i32 | undefined, index: usize): i32 {
     if (!previous.referenceEquals(next)) {
       previous.detachReference();
     }
     const identity = nodeIdentity( &this.nodes, id);
     if (identity === undefined) {
-      return;
+      return id;
+    }
+    next.setMountIdentity(identity!, this.treeGeneration);
+    next.attachReference(identity!, this.treeGeneration);
+    detachReferences(previous);
+    this.mutations.push({
+      kind: mutationReplace(), nodeId: id, replacementId: undefined, parentId: parent, fromIndex: index, toIndex: index,
+    });
+    const replacementId = this.replaceSubtree(id, next, parent, index);
+    const replacementMutation = this.mutations.atMut(this.mutations.length - 1usize);
+    if (replacementMutation !== undefined) {
+      replacementMutation!.replacementId = replacementId;
+    }
+    return replacementId;
+  }
+  private diffNode(previous: &Element, next: &Element, id: i32, parent: i32 | undefined, index: usize): i32 {
+    if (!previous.referenceEquals(next)) {
+      previous.detachReference();
+    }
+    const identity = nodeIdentity( &this.nodes, id);
+    if (identity === undefined) {
+      return id;
     }
     next.setMountIdentity(identity!, this.treeGeneration);
     next.attachReference(identity!, this.treeGeneration);
     if (!sameElement(previous, next)) {
-      detachReferences(previous);
-      this.mutations.push({
-        kind: mutationReplace(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
-      });
-      this.replaceSubtree(id, next, parent, index);
-      return;
+      return this.replaceNode(previous, next, id, parent, index);
+    }
+    if (previous.kind() === kindTextInput() && !next.isControlled()) {
+      next.preserveInputState(previous);
     }
     if (elementChanged(previous, next)) {
       this.mutations.push({
-        kind: mutationUpdate(), nodeId: id, parentId: parent, fromIndex: index, toIndex: index,
+        kind: mutationUpdate(), nodeId: id, replacementId: undefined, parentId: parent, fromIndex: index, toIndex: index,
       });
       const node = nodeAtMut( &mut this.nodes, id);
       if (node !== undefined) {
@@ -399,7 +412,7 @@ export class Reconciler implements Disposable {
         if (oldIndex === undefined) {
           const childId = this.snapshot(nextChild!, parentNode(id), nextIndex, false);
           this.mutations.push({
-            kind: mutationInsert(), nodeId: childId, parentId: parentNode(id), fromIndex: nextIndex, toIndex: nextIndex,
+            kind: mutationInsert(), nodeId: childId, replacementId: undefined, parentId: parentNode(id), fromIndex: nextIndex, toIndex: nextIndex,
           });
           newChildren.push(childId);
         } else {
@@ -410,11 +423,11 @@ export class Reconciler implements Disposable {
           if (childId !== undefined && previousChild !== undefined) {
             if (previousIndex !== nextIndex && nextChild!.keyIsPresent()) {
               this.mutations.push({
-                kind: mutationMove(), nodeId: childId!, parentId: parentNode(id), fromIndex: previousIndex, toIndex: nextIndex,
+                kind: mutationMove(), nodeId: childId!, replacementId: undefined, parentId: parentNode(id), fromIndex: previousIndex, toIndex: nextIndex,
               });
             }
-            this.diffNode(previousChild!, nextChild!, childId!, parentNode(id), nextIndex);
-            newChildren.push(childId!);
+            const resolvedChildId = this.diffNode(previousChild!, nextChild!, childId!, parentNode(id), nextIndex);
+            newChildren.push(resolvedChildId);
           }
         }
       }
@@ -431,7 +444,7 @@ export class Reconciler implements Disposable {
         }
         if (childId !== undefined) {
           this.mutations.push({
-            kind: mutationRemove(), nodeId: childId!, parentId: parentNode(id), fromIndex: previousIndex, toIndex: 0usize,
+            kind: mutationRemove(), nodeId: childId!, replacementId: undefined, parentId: parentNode(id), fromIndex: previousIndex, toIndex: 0usize,
           });
           deactivateSubtree( &mut this.nodes, childId!);
         }
@@ -452,6 +465,7 @@ export class Reconciler implements Disposable {
         newIndex = newIndex + 1usize;
       }
     }
+    return id;
   }
   private render(element: Element): Element {
     beginHookPassFor( &mut this.hooks);
@@ -465,20 +479,21 @@ export class Reconciler implements Disposable {
     this.nodes.clear();
     this.nextId = 0i32;
     this.treeGeneration = this.treeGeneration + 1u64;
-    this.root = this.render(move element);
+    const rendered = this.render(move element);
+    this.root = move rendered;
     this.duplicateKeyErrors = duplicateKeyCountInTree( &this.root);
     this.mounted = true;
     this.snapshot( &this.root, undefined, 0usize, true);
     flushLayoutEffectsFor( &mut this.hooks);
     flushPassiveEffectsFor( &mut this.hooks);
   }
-  public update(element: Element): void {
+  public update(input: Element): void {
     if (!this.mounted) {
-      this.mount(move element);
+      this.mount(move input);
       return;
     }
     this.treeGeneration = this.treeGeneration + 1u64;
-    const next = this.render(move element);
+    const next = this.render(move input);
     this.mutations.clear();
     this.duplicateKeyErrors = duplicateKeyCountInTree( &next);
     this.diffNode( &this.root, &next, 0i32, undefined, 0usize);
@@ -527,7 +542,7 @@ export class Reconciler implements Disposable {
       return undefined;
     }
     return {
-      kind: mutation!.kind, nodeId: mutation!.nodeId, parentId: mutation!.parentId, fromIndex: mutation!.fromIndex, toIndex: mutation!.toIndex,
+      kind: mutation!.kind, nodeId: mutation!.nodeId, replacementId: mutation!.replacementId, parentId: mutation!.parentId, fromIndex: mutation!.fromIndex, toIndex: mutation!.toIndex,
     };
   }
   public isMounted(): bool {
@@ -573,13 +588,38 @@ export class Reconciler implements Disposable {
     }
     return undefined;
   }
+  public parentNodeId(nodeId: i32): i32 | undefined {
+    const node = nodeAt( &this.nodes, nodeId);
+    if (node === undefined) {
+      return undefined;
+    }
+    return node!.parentId;
+  }
   public focusElement(element: &Element): bool {
     const identity = element.mountedId();
     if (identity === undefined || !this.mounted || element.generation() !== this.treeGeneration || !setFocusedInTree( &this.root, identity!)) {
       return false;
     }
+    const changed = this.focusedIdentity === undefined || this.focusedIdentity! !== identity!;
     this.focusedIdentity = identity!;
-    return true;
+    return changed;
+  }
+  public blurElement(element: &Element): bool {
+    const identity = element.mountedId();
+    if (identity === undefined || !this.mounted || element.generation() !== this.treeGeneration) {
+      return false;
+    }
+    const changed = this.focusedIdentity !== undefined && this.focusedIdentity! === identity!;
+    clearFocusedInTree( &this.root);
+    this.focusedIdentity = undefined;
+    return changed;
+  }
+  public detachSubtreeReferences(element: &Element): void {
+    detachReferences(element);
+    clearFocusedInTree(element);
+    if (this.focusedIdentity !== undefined && !setFocusedInTree( &this.root, this.focusedIdentity!)) {
+      this.focusedIdentity = undefined;
+    }
   }
   public focusFirst(kind: i32): bool {
     if (!this.mounted) {

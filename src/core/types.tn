@@ -1,22 +1,17 @@
-import { Element, ElementRef } from "../tnx-runtime";
-export enum FlexDirection {
-  Row, Column,
-}
-export enum Align {
-  Auto, Start, Center, End, Stretch,
-}
-export enum Justify {
-  Start, Center, End, SpaceBetween, SpaceAround, SpaceEvenly,
-}
-export enum PositionType {
-  Relative, Absolute,
-}
-export enum Display {
-  Flex, None,
-}
-export enum Overflow {
-  Visible, Hidden, Scroll,
-}
+import { fromRaw } from "std/string";
+import { AccessibilityRole as RuntimeAccessibilityRole, Align as RuntimeAlign, Display as RuntimeDisplay, Element, ElementRef, FlexDirection as RuntimeFlexDirection, Justify as RuntimeJustify, KeyboardType as RuntimeKeyboardType, Length as RuntimeLength, Overflow as RuntimeOverflow, PositionType as RuntimePositionType, StyleSnapshot, TextSelection as RuntimeTextSelection, WindowClosePolicy as RuntimeWindowClosePolicy } from "../tnx-runtime";
+
+export type Length = RuntimeLength;
+export type FlexDirection = RuntimeFlexDirection;
+export type Align = RuntimeAlign;
+export type Justify = RuntimeJustify;
+export type PositionType = RuntimePositionType;
+export type Display = RuntimeDisplay;
+export type Overflow = RuntimeOverflow;
+export type AccessibilityRole = RuntimeAccessibilityRole;
+export type KeyboardType = RuntimeKeyboardType;
+export type TextSelection = RuntimeTextSelection;
+export type WindowClosePolicy = RuntimeWindowClosePolicy;
 export struct Insets {
   public top: f32;
   public right: f32;
@@ -24,75 +19,75 @@ export struct Insets {
   public left: f32;
 }
 export class Style {
-  public width: f32;
-  public height: f32;
-  public minWidth: f32;
-  public minHeight: f32;
-  public maxWidth: f32;
-  public maxHeight: f32;
-  public margin: f32;
-  public padding: f32;
-  public marginTop: f32;
-  public marginRight: f32;
-  public marginBottom: f32;
-  public marginLeft: f32;
-  public paddingTop: f32;
-  public paddingRight: f32;
-  public paddingBottom: f32;
-  public paddingLeft: f32;
-  public gap: f32;
+  public width: RuntimeLength;
+  public height: RuntimeLength;
+  public minWidth: RuntimeLength;
+  public minHeight: RuntimeLength;
+  public maxWidth: RuntimeLength;
+  public maxHeight: RuntimeLength;
+  public margin: RuntimeLength;
+  public padding: RuntimeLength;
+  public marginTop: RuntimeLength;
+  public marginRight: RuntimeLength;
+  public marginBottom: RuntimeLength;
+  public marginLeft: RuntimeLength;
+  public paddingTop: RuntimeLength;
+  public paddingRight: RuntimeLength;
+  public paddingBottom: RuntimeLength;
+  public paddingLeft: RuntimeLength;
+  public gap: RuntimeLength;
   public flex: f32;
   public flexGrow: f32;
   public flexShrink: f32;
-  public flexBasis: f32;
-  public flexDirection: i32;
-  public alignItems: i32;
-  public alignSelf: i32;
-  public justifyContent: i32;
-  public positionType: i32;
-  public insetTop: f32;
-  public insetRight: f32;
-  public insetBottom: f32;
-  public insetLeft: f32;
-  public display: i32;
-  public overflow: i32;
+  public flexBasis: RuntimeLength;
+  public flexDirection: RuntimeFlexDirection;
+  public alignItems: RuntimeAlign;
+  public alignSelf: RuntimeAlign;
+  public justifyContent: RuntimeJustify;
+  public positionType: RuntimePositionType;
+  public insetTop: RuntimeLength;
+  public insetRight: RuntimeLength;
+  public insetBottom: RuntimeLength;
+  public insetLeft: RuntimeLength;
+  public display: RuntimeDisplay;
+  public overflow: RuntimeOverflow;
   public aspectRatio: f32;
   public hasMarginEdges: bool;
   public hasPaddingEdges: bool;
   public revision: u64;
   public constructor() {
-    this.width = 0.0f32;
-    this.height = 0.0f32;
-    this.minWidth = 0.0f32;
-    this.minHeight = 0.0f32;
-    this.maxWidth = 0.0f32;
-    this.maxHeight = 0.0f32;
-    this.margin = 0.0f32;
-    this.padding = 0.0f32;
-    this.marginTop = 0.0f32;
-    this.marginRight = 0.0f32;
-    this.marginBottom = 0.0f32;
-    this.marginLeft = 0.0f32;
-    this.paddingTop = 0.0f32;
-    this.paddingRight = 0.0f32;
-    this.paddingBottom = 0.0f32;
-    this.paddingLeft = 0.0f32;
-    this.gap = 0.0f32;
+    this.width = RuntimeLength.Auto;
+    this.height = RuntimeLength.Auto;
+    this.minWidth = RuntimeLength.Auto;
+    this.minHeight = RuntimeLength.Auto;
+    this.maxWidth = RuntimeLength.Auto;
+    this.maxHeight = RuntimeLength.Auto;
+    this.margin = RuntimeLength.Points(0.0f32);
+    this.padding = RuntimeLength.Points(0.0f32);
+    this.marginTop = RuntimeLength.Points(0.0f32);
+    this.marginRight = RuntimeLength.Points(0.0f32);
+    this.marginBottom = RuntimeLength.Points(0.0f32);
+    this.marginLeft = RuntimeLength.Points(0.0f32);
+    this.paddingTop = RuntimeLength.Points(0.0f32);
+    this.paddingRight = RuntimeLength.Points(0.0f32);
+    this.paddingBottom = RuntimeLength.Points(0.0f32);
+    this.paddingLeft = RuntimeLength.Points(0.0f32);
+    this.gap = RuntimeLength.Points(0.0f32);
     this.flex = 0.0f32;
     this.flexGrow = 0.0f32;
     this.flexShrink = 1.0f32;
-    this.flexBasis = 0.0f32;
-    this.flexDirection = 1i32;
-    this.alignItems = 4i32;
-    this.alignSelf = 0i32;
-    this.justifyContent = 0i32;
-    this.positionType = 0i32;
-    this.insetTop = 0.0f32;
-    this.insetRight = 0.0f32;
-    this.insetBottom = 0.0f32;
-    this.insetLeft = 0.0f32;
-    this.display = 0i32;
-    this.overflow = 0i32;
+    this.flexBasis = RuntimeLength.Auto;
+    this.flexDirection = RuntimeFlexDirection.Column;
+    this.alignItems = RuntimeAlign.Stretch;
+    this.alignSelf = RuntimeAlign.Auto;
+    this.justifyContent = RuntimeJustify.Start;
+    this.positionType = RuntimePositionType.Relative;
+    this.insetTop = RuntimeLength.Auto;
+    this.insetRight = RuntimeLength.Auto;
+    this.insetBottom = RuntimeLength.Auto;
+    this.insetLeft = RuntimeLength.Auto;
+    this.display = RuntimeDisplay.Flex;
+    this.overflow = RuntimeOverflow.Visible;
     this.aspectRatio = 0.0f32;
     this.hasMarginEdges = false;
     this.hasPaddingEdges = false;
@@ -102,60 +97,74 @@ export class Style {
 export function defaultStyle(): Style {
   return new Style();
 }
+export function auto(): RuntimeLength {
+  return RuntimeLength.Auto;
+}
+export function points(value: f32): RuntimeLength {
+  return RuntimeLength.Points(value);
+}
+export function percent(value: f32): RuntimeLength {
+  return RuntimeLength.Percent(value);
+}
+export function styleSnapshot(style: &Style): StyleSnapshot {
+  return {
+    width: style.width, height: style.height, minWidth: style.minWidth, minHeight: style.minHeight, maxWidth: style.maxWidth, maxHeight: style.maxHeight, margin: style.margin, padding: style.padding, marginTop: style.marginTop, marginRight: style.marginRight, marginBottom: style.marginBottom, marginLeft: style.marginLeft, paddingTop: style.paddingTop, paddingRight: style.paddingRight, paddingBottom: style.paddingBottom, paddingLeft: style.paddingLeft, gap: style.gap, flex: style.flex, flexGrow: style.flexGrow, flexShrink: style.flexShrink, flexBasis: style.flexBasis, flexDirection: style.flexDirection, alignItems: style.alignItems, alignSelf: style.alignSelf, justifyContent: style.justifyContent, positionType: style.positionType, insetTop: style.insetTop, insetRight: style.insetRight, insetBottom: style.insetBottom, insetLeft: style.insetLeft, display: style.display, overflow: style.overflow, aspectRatio: style.aspectRatio, hasMarginEdges: style.hasMarginEdges, hasPaddingEdges: style.hasPaddingEdges, revision: style.revision,
+  };
+}
 function bumpStyle(style: &mut Style): void {
   style.revision = style.revision + 1u64;
 }
-export function styleSetWidth(style: &mut Style, value: f32): void {
+export function styleSetWidth(style: &mut Style, value: RuntimeLength): void {
   style.width = value;
   bumpStyle(style);
 }
-export function styleSetHeight(style: &mut Style, value: f32): void {
+export function styleSetHeight(style: &mut Style, value: RuntimeLength): void {
   style.height = value;
   bumpStyle(style);
 }
-export function styleSetMinWidth(style: &mut Style, value: f32): void {
+export function styleSetMinWidth(style: &mut Style, value: RuntimeLength): void {
   style.minWidth = value;
   bumpStyle(style);
 }
-export function styleSetMinHeight(style: &mut Style, value: f32): void {
+export function styleSetMinHeight(style: &mut Style, value: RuntimeLength): void {
   style.minHeight = value;
   bumpStyle(style);
 }
-export function styleSetPadding(style: &mut Style, value: f32): void {
+export function styleSetPadding(style: &mut Style, value: RuntimeLength): void {
   style.padding = value;
   style.hasPaddingEdges = false;
   bumpStyle(style);
 }
-export function styleSetMargin(style: &mut Style, value: f32): void {
+export function styleSetMargin(style: &mut Style, value: RuntimeLength): void {
   style.margin = value;
   style.hasMarginEdges = false;
   bumpStyle(style);
 }
-export function styleSetGap(style: &mut Style, value: f32): void {
+export function styleSetGap(style: &mut Style, value: RuntimeLength): void {
   style.gap = value;
   bumpStyle(style);
 }
-export function styleSetFlexDirection(style: &mut Style, value: i32): void {
+export function styleSetFlexDirection(style: &mut Style, value: RuntimeFlexDirection): void {
   style.flexDirection = value;
   bumpStyle(style);
 }
-export function styleSetJustifyContent(style: &mut Style, value: i32): void {
+export function styleSetJustifyContent(style: &mut Style, value: RuntimeJustify): void {
   style.justifyContent = value;
   bumpStyle(style);
 }
-export function styleSetAlignItems(style: &mut Style, value: i32): void {
+export function styleSetAlignItems(style: &mut Style, value: RuntimeAlign): void {
   style.alignItems = value;
   bumpStyle(style);
 }
-export function styleSetDisplay(style: &mut Style, value: i32): void {
+export function styleSetDisplay(style: &mut Style, value: RuntimeDisplay): void {
   style.display = value;
   bumpStyle(style);
 }
-export function styleSetMaxWidth(style: &mut Style, value: f32): void {
+export function styleSetMaxWidth(style: &mut Style, value: RuntimeLength): void {
   style.maxWidth = value;
   bumpStyle(style);
 }
-export function styleSetMaxHeight(style: &mut Style, value: f32): void {
+export function styleSetMaxHeight(style: &mut Style, value: RuntimeLength): void {
   style.maxHeight = value;
   bumpStyle(style);
 }
@@ -171,23 +180,23 @@ export function styleSetFlexShrink(style: &mut Style, value: f32): void {
   style.flexShrink = value;
   bumpStyle(style);
 }
-export function styleSetFlexBasis(style: &mut Style, value: f32): void {
+export function styleSetFlexBasis(style: &mut Style, value: RuntimeLength): void {
   style.flexBasis = value;
   bumpStyle(style);
 }
-export function styleSetAlignSelf(style: &mut Style, value: i32): void {
+export function styleSetAlignSelf(style: &mut Style, value: RuntimeAlign): void {
   style.alignSelf = value;
   bumpStyle(style);
 }
-export function styleSetPositionType(style: &mut Style, value: i32): void {
+export function styleSetPositionType(style: &mut Style, value: RuntimePositionType): void {
   style.positionType = value;
   bumpStyle(style);
 }
-export function styleSetOverflow(style: &mut Style, value: i32): void {
+export function styleSetOverflow(style: &mut Style, value: RuntimeOverflow): void {
   style.overflow = value;
   bumpStyle(style);
 }
-export function styleSetInsets(style: &mut Style, top: f32, right: f32, bottom: f32, left: f32): void {
+export function styleSetInsets(style: &mut Style, top: RuntimeLength, right: RuntimeLength, bottom: RuntimeLength, left: RuntimeLength): void {
   style.insetTop = top;
   style.insetRight = right;
   style.insetBottom = bottom;
@@ -198,7 +207,7 @@ export function styleSetAspectRatio(style: &mut Style, value: f32): void {
   style.aspectRatio = value;
   bumpStyle(style);
 }
-export function styleSetMarginEdges(style: &mut Style, top: f32, right: f32, bottom: f32, left: f32): void {
+export function styleSetMarginEdges(style: &mut Style, top: RuntimeLength, right: RuntimeLength, bottom: RuntimeLength, left: RuntimeLength): void {
   style.marginTop = top;
   style.marginRight = right;
   style.marginBottom = bottom;
@@ -206,7 +215,7 @@ export function styleSetMarginEdges(style: &mut Style, top: f32, right: f32, bot
   style.hasMarginEdges = true;
   bumpStyle(style);
 }
-export function styleSetPaddingEdges(style: &mut Style, top: f32, right: f32, bottom: f32, left: f32): void {
+export function styleSetPaddingEdges(style: &mut Style, top: RuntimeLength, right: RuntimeLength, bottom: RuntimeLength, left: RuntimeLength): void {
   style.paddingTop = top;
   style.paddingRight = right;
   style.paddingBottom = bottom;
@@ -225,11 +234,13 @@ export struct EmptyProps {
 export struct WindowProps {
   public children: Element;
   public title: string;
-  public width?: f32;
-  public height?: f32;
+  public width?: RuntimeLength;
+  public height?: RuntimeLength;
+  public onClose?: () => void;
+  public closePolicy?: RuntimeWindowClosePolicy;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct ViewProps {
@@ -237,7 +248,7 @@ export struct ViewProps {
   public children: Element;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct TextSpan {
@@ -250,9 +261,9 @@ export struct TextSpan {
       };
     }
   }
-  public asStr(): &str {
+  public asString(): string {
     unsafe {
-      return & *(this.pointer as *const str);
+      return fromRaw(this.pointer as *mut u8, this.length);
     }
   }
 }
@@ -260,7 +271,7 @@ export struct TextProps {
   public children: string;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct ButtonProps {
@@ -269,20 +280,26 @@ export struct ButtonProps {
   public elementRef?: &ElementRef;
   public enabled?: bool;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct TextInputProps {
   public value?: string;
   public defaultValue?: string;
   public placeholder?: string;
-  public onChange?: (string) => void;
+  public onChangeText?: (string) => void;
+  public onSubmitEditing?: () => void;
+  public onFocus?: () => void;
+  public onBlur?: () => void;
+  public editable?: bool;
+  public autoFocus?: bool;
+  public multiline?: bool;
+  public selection?: RuntimeTextSelection;
+  public keyboardType?: RuntimeKeyboardType;
   public elementRef?: &ElementRef;
-  public selectionStart?: usize;
-  public selectionEnd?: usize;
   public enabled?: bool;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct ImageProps {
@@ -291,7 +308,7 @@ export struct ImageProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct ScrollViewProps {
@@ -299,13 +316,13 @@ export struct ScrollViewProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct ListProps {
   public itemCount: usize;
   public renderItem: (usize) => Element;
-  public itemHeight: f32;
+  public itemHeight?: RuntimeLength;
   public firstVisibleIndex?: usize;
   public visibleItemCount?: usize;
   public overscan?: usize;
@@ -313,7 +330,7 @@ export struct ListProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct SwitchProps {
@@ -323,7 +340,7 @@ export struct SwitchProps {
   public elementRef?: &ElementRef;
   public enabled?: bool;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct SliderProps {
@@ -335,7 +352,7 @@ export struct SliderProps {
   public elementRef?: &ElementRef;
   public enabled?: bool;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct ProgressProps {
@@ -345,7 +362,7 @@ export struct ProgressProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct MenuProps {
@@ -353,7 +370,7 @@ export struct MenuProps {
   public title?: string;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct DialogProps {
@@ -361,7 +378,7 @@ export struct DialogProps {
   public children: Element;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct ToolbarProps {
@@ -369,7 +386,7 @@ export struct ToolbarProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct SplitViewProps {
@@ -377,7 +394,7 @@ export struct SplitViewProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct StackProps {
@@ -385,7 +402,7 @@ export struct StackProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct GridProps {
@@ -394,7 +411,7 @@ export struct GridProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }
 export struct CanvasProps {
@@ -402,6 +419,6 @@ export struct CanvasProps {
   public style?: Style;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;
-  public accessibilityRole?: i32;
+  public accessibilityRole?: RuntimeAccessibilityRole;
   public accessibilityEnabled?: bool;
 }

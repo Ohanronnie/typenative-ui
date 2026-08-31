@@ -4,7 +4,7 @@ import { Text } from "../src/components";
 import { EmptyProps } from "../src/core/types";
 import { Cleanup, useEffect, useState } from "../src/hooks/hooks";
 import { HeadlessRenderer } from "../src/renderer/headless";
-import { createText, Element, createFragmentElements, hostChildAt, createElement } from "../src/tnx-runtime";
+import { createText, Element, createFragmentElements, hostChildAt, createElement, keyText } from "../src/tnx-runtime";
 
 static mut firstEffects: i32 = 0;
 static mut secondEffects: i32 = 0;
@@ -45,7 +45,7 @@ function stableDependencies(): Array<u64> {
 }
 function First(props: EmptyProps): Element {
   useEffect(firstEffect, stableDependencies());
-  return <Text>first</Text>;
+  return <Text key={42}>first</Text>;
 }
 function Second(props: EmptyProps): Element {
   useEffect(secondEffect, stableDependencies());
@@ -70,24 +70,20 @@ function list(reverse: bool): Element {
   const children = new Array<Element>({
     capacity: 2
   });
-  const keyA: string | undefined = "a";
-  const keyB: string | undefined = "b";
   if (!reverse) {
     children.push(createElement<ItemProps>(Item, {
       id: 1i32, seed: 10i32,
-    }, keyA));
+    }, keyText(String("a"))));
     children.push(createElement<ItemProps>(Item, {
       id: 2i32, seed: 20i32,
-    }, keyB));
+    }, keyText(String("b"))));
   } else {
-    const reverseKeyA: string | undefined = "a";
-    const reverseKeyB: string | undefined = "b";
     children.push(createElement<ItemProps>(Item, {
       id: 2i32, seed: 20i32,
-    }, reverseKeyB));
+    }, keyText(String("b"))));
     children.push(createElement<ItemProps>(Item, {
       id: 1i32, seed: 10i32,
-    }, reverseKeyA));
+    }, keyText(String("a"))));
   }
   return createFragmentElements(move children);
 }
@@ -95,24 +91,26 @@ function singleItem(changedKey: bool): Element {
   const children = new Array<Element>({
     capacity: 1
   });
-  let key: string | undefined = "stable";
   let seed: i32 = 10;
   if (changedKey) {
-    key = "remounted";
     seed = 30i32;
   }
-  children.push(createElement<ItemProps>(Item, {
-    id: 1i32, seed: seed,
-  }, key));
+  if (changedKey) {
+    children.push(createElement<ItemProps>(Item, {
+      id: 1i32, seed: seed,
+    }, keyText(String("remounted"))));
+  } else {
+    children.push(createElement<ItemProps>(Item, {
+      id: 1i32, seed: seed,
+    }, keyText(String("stable"))));
+  }
   return createFragmentElements(move children);
 }
 function main(): i32 {
-  const firstKey: string | undefined = "same";
-  const secondKey: string | undefined = "same";
   const first = createElement<EmptyProps>(First, {
-  }, move firstKey);
+  }, keyText(String("same")));
   const second = createElement<EmptyProps>(Second, {
-  }, move secondKey);
+  }, keyText(String("same")));
   if (first.sameComponent( &second)) {
     first.dispose();
     second.dispose();
@@ -120,62 +118,66 @@ function main(): i32 {
   }
   first.dispose();
   second.dispose();
-  using renderer = new HeadlessRenderer();
-  const mountKey: string | undefined = "same";
-  renderer.mount(createElement<EmptyProps>(First, {
-  }, mountKey));
-  unsafe {
-    if (firstEffects !== 1i32 || secondEffects !== 0i32) {
-      renderer.unmount();
-      return 11;
+  {
+    using renderer = new HeadlessRenderer();
+    renderer.mount(createElement<EmptyProps>(First, {
+    }, keyText(String("same"))));
+    unsafe {
+      if (firstEffects !== 1i32 || secondEffects !== 0i32) {
+        renderer.unmount();
+        return 11;
+      }
     }
-  }
-  const updateKey: string | undefined = "same";
-  renderer.update(createElement<EmptyProps>(Second, {
-  }, updateKey));
-  unsafe {
-    if (firstCleanups !== 1i32 || secondEffects !== 1i32) {
-      renderer.unmount();
-      return 12;
+    renderer.update(createElement<EmptyProps>(Second, {
+    }, keyText(String("same"))));
+    unsafe {
+      if (firstCleanups !== 1i32 || secondEffects !== 1i32) {
+        renderer.unmount();
+        return 12;
+      }
     }
+    renderer.unmount();
   }
-  renderer.unmount();
   unsafe {
     if (secondCleanups !== 1i32) {
       return 13;
     }
   }
-  using keyed = new HeadlessRenderer();
-  keyed.mount(list(false));
-  unsafe {
-    if (seenA !== 10i32 || seenB !== 20i32) {
-      keyed.unmount();
-      return 14;
+  {
+    using keyed = new HeadlessRenderer();
+    keyed.mount(list(false));
+    unsafe {
+      if (seenA !== 10i32 || seenB !== 20i32) {
+        keyed.unmount();
+        return 14;
+      }
     }
-  }
-  keyed.update(list(true));
-  unsafe {
-    if (seenA !== 10i32 || seenB !== 20i32) {
-      keyed.unmount();
-      return 15;
+    keyed.update(list(true));
+    unsafe {
+      if (seenA !== 10i32 || seenB !== 20i32) {
+        keyed.unmount();
+        return 15;
+      }
     }
-  }
-  const firstChild = hostChildAt(keyed.rootElement(), 0usize);
-  const secondChild = hostChildAt(keyed.rootElement(), 1usize);
-  if (firstChild === undefined || secondChild === undefined || firstChild!.textLength() !== 4usize || secondChild!.textLength() !== 4usize) {
+    const firstChild = hostChildAt(keyed.rootElement(), 0usize);
+    const secondChild = hostChildAt(keyed.rootElement(), 1usize);
+    if (firstChild === undefined || secondChild === undefined || firstChild!.textLength() !== 4usize || secondChild!.textLength() !== 4usize) {
+      keyed.unmount();
+      return 16;
+    }
     keyed.unmount();
-    return 16;
   }
-  keyed.unmount();
-  using remount = new HeadlessRenderer();
-  remount.mount(singleItem(false));
-  remount.update(singleItem(true));
-  unsafe {
-    if (seenA !== 30i32) {
-      remount.unmount();
-      return 17;
+  {
+    using remount = new HeadlessRenderer();
+    remount.mount(singleItem(false));
+    remount.update(singleItem(true));
+    unsafe {
+      if (seenA !== 30i32) {
+        remount.unmount();
+        return 17;
+      }
     }
+    remount.unmount();
   }
-  remount.unmount();
   return 0;
 }

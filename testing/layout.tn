@@ -1,22 +1,23 @@
-import { Style } from "../src/core/types";
+import { Style, points } from "../src/core/types";
 import { LayoutEngine, LayoutNode } from "../src/layout/layout";
+import { FlexDirection } from "../src/tnx-runtime";
 
 function main(): i32 {
   const rootStyle = new Style();
-  rootStyle.width = 200.0f32;
-  rootStyle.height = 100.0f32;
-  rootStyle.padding = 10.0f32;
-  rootStyle.gap = 5.0f32;
-  rootStyle.flexDirection = 0i32;
+  rootStyle.width = points(200.0f32);
+  rootStyle.height = points(100.0f32);
+  rootStyle.padding = points(10.0f32);
+  rootStyle.gap = points(5.0f32);
+  rootStyle.flexDirection = FlexDirection.Row;
   const root = new LayoutNode(rootStyle);
   const firstStyle = new Style();
-  firstStyle.width = 40.0f32;
-  firstStyle.height = 20.0f32;
+  firstStyle.width = points(40.0f32);
+  firstStyle.height = points(20.0f32);
   const first = new LayoutNode(firstStyle);
   root.add(move first);
   const secondStyle = new Style();
-  secondStyle.width = 60.0f32;
-  secondStyle.height = 30.0f32;
+  secondStyle.width = points(60.0f32);
+  secondStyle.height = points(30.0f32);
   const second = new LayoutNode(secondStyle);
   root.add(move second);
   const engine = new LayoutEngine();

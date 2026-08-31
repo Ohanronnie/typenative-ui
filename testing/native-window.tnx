@@ -1,0 +1,62 @@
+import { Text, View, Window } from "../src/components";
+import { points } from "../src/core/types";
+import { NativeRenderer } from "../src/platform/macos";
+import { Element, ElementRef, WindowClosePolicy, createElementRef } from "../src/tnx-runtime";
+
+function windowTree(firstRef: &ElementRef, secondRef: &ElementRef): Element {
+  return <>
+    <Window title="First window" width={points(320.0f32)} height={points(180.0f32)} closePolicy={WindowClosePolicy.Prevent} elementRef={firstRef}>
+      <View>
+        <Text>First</Text>
+      </View>
+    </Window>
+    <Window title="Second window" width={points(360.0f32)} height={points(220.0f32)} elementRef={secondRef}>
+      <View>
+        <Text>Second</Text>
+      </View>
+    </Window>
+  </>;
+}
+function main(): i32 {
+  using renderer = new NativeRenderer();
+  let firstRef = createElementRef();
+  let secondRef = createElementRef();
+  let root = windowTree( &firstRef, &secondRef);
+  if (!renderer.mount(move root) || renderer.windowCount() !== 2usize) {
+    renderer.close();
+    return 1;
+  }
+  unsafe {
+    if (renderer.windowHandleAt(0usize) === renderer.windowHandleAt(1usize)) {
+      renderer.close();
+      return 2;
+    }
+  }
+  if (!firstRef.isAttached() || !secondRef.isAttached()) {
+    renderer.close();
+    return 3;
+  }
+  const firstIdentity = firstRef.nodeIdentity();
+  const secondIdentity = secondRef.nodeIdentity();
+  if (firstIdentity === undefined || secondIdentity === undefined || renderer.windowShouldClose(firstIdentity!) || !renderer.windowShouldClose(secondIdentity!)) {
+    renderer.close();
+    return 4;
+  }
+  unsafe {
+    const firstHandle = renderer.windowHandleAt(0usize);
+    renderer.dispatchWindowWillClose(secondIdentity!);
+    if (renderer.windowCount() !== 1usize || renderer.windowHandleAt(0usize) !== firstHandle) {
+      renderer.close();
+      return 5;
+    }
+    if (secondRef.isAttached()) {
+      renderer.close();
+      return 7;
+    }
+  }
+  renderer.close();
+  if (firstRef.isAttached() || secondRef.isAttached()) {
+    return 6;
+  }
+  return 0;
+}

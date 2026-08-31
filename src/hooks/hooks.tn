@@ -1,6 +1,6 @@
 import { borrowCallable, dropValue, nullPointer, rawAlloc, rawFree, sizeOf, storeRaw } from "std/alloc";
 import { Array } from "std/collections";
-import { atomicCompareExchangeI32, atomicLoadI32, atomicStoreI32, Disposable, MemoryOrder } from "std/core";
+import { atomicCompareExchangeI32, atomicLoadI32, atomicStoreI32, Disposable, Equal, MemoryOrder } from "std/core";
 import { yieldNow } from "std/thread";
 import { ComponentId, Key } from "../tnx-runtime";
 
@@ -36,12 +36,50 @@ function nullRaw(): *mut u8 {
     return nullPointer<u8>();
   }
 }
+struct HookDependency {
+  private value: *mut u8;
+  private dropper: () => void;
+  private disposed: bool;
+  public valuePointer(): *mut u8 {
+    unsafe {
+      return this.value;
+    }
+  }
+  public dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.dropper();
+    unsafe {
+      if (this.value !== nullPointer<u8>()) {
+        rawFree(this.value);
+        this.value = nullPointer<u8>();
+      }
+    }
+    this.disposed = true;
+  }
+  [Symbol.dispose](): void {
+    this.dispose();
+  }
+}
+function newHookDependency<T extends Equal<T> >(dependencyValue: T): HookDependency {
+  unsafe {
+    const pointer = rawAlloc(sizeOf<T>());
+    storeRaw<T>(pointer as *mut T, move dependencyValue);
+    const dropper = move(): void => {
+      dropValue<T>(pointer as *mut T);
+    };
+    return {
+      value: pointer, dropper: move dropper, disposed: false,
+    };
+  }
+}
 struct HookCell {
   private kind: i32;
   private initialized: bool;
   private value: *mut u8;
   private dropper?: () => void;
-  private dependencies: Array<u64>;
+  private dependencies: Array<HookDependency>;
   private pending: bool;
   private effect: () =>() => void;
   private hasEffect: bool;
@@ -79,9 +117,10 @@ struct HookCell {
     return this.dropper !== undefined;
   }
   public disposeValue(): void {
-    if (this.dropper !== undefined) {
-      this.dropper!();
-      this.dropper = undefined;
+    const dropper = this.dropper;
+    this.dropper = undefined;
+    if (dropper !== undefined) {
+      dropper!();
     }
     unsafe {
       if (this.value !== nullPointer<u8>()) {
@@ -102,9 +141,10 @@ struct HookCell {
     }
   }
   public clearDeferredValue(): void {
-    if (this.deferredDropper !== undefined) {
-      this.deferredDropper!();
-      this.deferredDropper = undefined;
+    const dropper = this.deferredDropper;
+    this.deferredDropper = undefined;
+    if (dropper !== undefined) {
+      dropper!();
     }
     unsafe {
       if (this.deferredValue !== nullPointer<u8>()) {
@@ -125,15 +165,16 @@ struct HookCell {
     }
   }
   public destroyStoredValue(): void {
-    if (this.dropper !== undefined) {
-      this.dropper!();
-      this.dropper = undefined;
+    const dropper = this.dropper;
+    this.dropper = undefined;
+    if (dropper !== undefined) {
+      dropper!();
     }
   }
   public installDropper(dropper: () => void): void {
     this.dropper = move dropper;
   }
-  public dependenciesChanged(dependencies: &Array<u64 >): bool {
+  public dependenciesChanged<T extends Equal<T> >(dependencies: &Array<T >): bool {
     if (this.dependencies.length !== dependencies.length) {
       return true;
     }
@@ -141,34 +182,35 @@ struct HookCell {
     while (index<dependencies.length) {
       const previous = this.dependencies.at(index);
       const next = dependencies.at(index);
-      let differs = false;
       if (previous === undefined || next === undefined) {
-        differs = true;
-      } else {
-        unsafe {
-          differs = *(previous!) !== *(next!);
-        }
-      }
-      if (differs) {
         return true;
+      }
+      unsafe {
+        const previousValue = & *(previous!.valuePointer()as *const T);
+        const protocol =( * previousValue)as Equal<T>;
+        if (!protocol.equals(next!)) {
+          return true;
+        }
       }
       index = index + 1usize;
     }
     return false;
   }
-  public replaceDependencies(dependencies: Array<u64 >): void {
-    this.dependencies.clear();
-    let index: usize = 0;
-    while (index<dependencies.length) {
-      const value = dependencies.at(index);
-      if (value !== undefined) {
-        let copied: u64 = 0;
-        unsafe {
-          copied = *(value!);
-        }
-        this.dependencies.push(copied);
+  public replaceDependencies<T extends Equal<T> >(dependencies: Array<T >): void {
+    let oldIndex: usize = 0;
+    while (oldIndex<this.dependencies.length) {
+      const previous = this.dependencies.atMut(oldIndex);
+      if (previous !== undefined) {
+        previous!.dispose();
       }
-      index = index + 1usize;
+      oldIndex = oldIndex + 1usize;
+    }
+    this.dependencies.clear();
+    while (dependencies.length > 0usize) {
+      const value = dependencies.pop();
+      if (value !== undefined) {
+        this.dependencies.push(newHookDependency<T>(move value!));
+      }
     }
   }
   public markPending(): void {
@@ -221,6 +263,14 @@ struct HookCell {
     this.clearCallbacks();
     this.disposeValue();
     this.clearDeferredValue();
+    let index: usize = 0;
+    while (index<this.dependencies.length) {
+      const dependency = this.dependencies.atMut(index);
+      if (dependency !== undefined) {
+        dependency!.dispose();
+      }
+      index = index + 1usize;
+    }
     this.dependencies.clear();
   }
   public kindCode(): i32 {
@@ -230,7 +280,7 @@ struct HookCell {
 function newHookCell(kind: i32, generation: u64): HookCell {
   let value: *mut u8 = nullRaw();
   return {
-    kind: kind, initialized: false, value: value, dropper: undefined, dependencies: new Array<u64>({
+    kind: kind, initialized: false, value: value, dropper: undefined, dependencies: new Array<HookDependency>({
       capacity: 0usize
     }), pending: false, effect: noopEffect, hasEffect: false, cleanup: noop, hasCleanup: false, deferredValue: nullRaw(), deferredDropper: undefined, seenGeneration: generation,
   };
@@ -364,7 +414,7 @@ export class HookRoot implements Disposable {
   private hookOrderErrors: usize;
   public transitionDepth: i32;
   private invalidCell: HookCell;
-  private previousContext: *mut u8;
+  private previousContexts: Array< *mut u8>;
   public constructor() {
     this.components = new Array<HookComponent>({
       capacity: 8usize
@@ -382,7 +432,9 @@ export class HookRoot implements Disposable {
     this.hookOrderErrors = 0usize;
     this.transitionDepth = 0i32;
     this.invalidCell = newHookCell(0i32, 0u64);
-    this.previousContext = nullRaw();
+    this.previousContexts = new Array< *mut u8>({
+      capacity: 0usize
+    });
   }
   public startPass(): void {
     this.generation = this.generation + 1u64;
@@ -598,7 +650,10 @@ export class HookRoot implements Disposable {
     }
     this.components.clear();
     this.activeComponents.clear();
+    this.previousContexts.clear();
     this.components.shrinkToFit();
+    this.activeComponents.shrinkToFit();
+    this.previousContexts.shrinkToFit();
     this.generation = 0u64;
     this.updatePending = false;
     this.updateCallback = undefined;
@@ -634,20 +689,15 @@ export class HookRoot implements Disposable {
       this.transitionDepth = this.transitionDepth - 1i32;
     }
   }
-  public unsafe setPreviousContext(pointer: *mut u8): void {
-    unsafe {
-      this.previousContext = pointer;
-    }
+  public unsafe pushPreviousContext(pointer: *mut u8): void {
+    this.previousContexts.push(pointer);
   }
-  public unsafe previousContextValue(): *mut u8 {
-    unsafe {
-      return this.previousContext;
+  public unsafe popPreviousContext(): *mut u8 {
+    const pointer = this.previousContexts.pop();
+    if (pointer === undefined) {
+      return nullRaw();
     }
-  }
-  public clearPreviousContext(): void {
-    unsafe {
-      this.previousContext = nullRaw();
-    }
+    return pointer!;
   }
   [Symbol.dispose](): void {
     this.clear();
@@ -765,7 +815,7 @@ function subscribeExternal(subscribe: (() => void) => Cleanup, owner: *mut u8, c
 export function beginHookPassFor(root: &mut HookRoot): void {
   ensureHookContext();
   unsafe {
-    root.setPreviousContext(pthread_getspecific(hookContextKey));
+    root.pushPreviousContext(pthread_getspecific(hookContextKey));
     pthread_setspecific(hookContextKey, rootPointer(root));
   }
   root.startPass();
@@ -782,9 +832,8 @@ export function finishHookPassFor(root: &mut HookRoot): void {
   ensureHookContext();
   unsafe {
     if (pthread_getspecific(hookContextKey) === rootPointer(root)) {
-      pthread_setspecific(hookContextKey, root.previousContextValue());
+      pthread_setspecific(hookContextKey, root.popPreviousContext());
     }
-    root.clearPreviousContext();
   }
 }
 export function beginBatch(): void {
@@ -858,24 +907,24 @@ export function useReducer<StateValue, Action>(reducer: (StateValue, Action) => 
   const dispatch = createReducerDispatch<StateValue, Action>(rootPointer(root), componentIndex, cellIndex, root.componentInstance(componentIndex), move reducer);
   return(readCellValue<StateValue>(cell), move dispatch);
 }
-function installEffectCell(cell: &mut HookCell, effect: () =>() => void, dependencies: Array<u64 >): void {
+function installEffectCell<T extends Equal<T> >(cell: &mut HookCell, effect: () =>() => void, dependencies: Array<T >): void {
   cell.installEffect(move effect);
   cell.replaceDependencies(move dependencies);
   cell.setInitialized(true);
   cell.markPending();
 }
-function useEffectCell(kind: i32, effect: () =>() => void, dependencies: Array<u64 >): void {
+function useEffectCell<T extends Equal<T> >(kind: i32, effect: () =>() => void, dependencies: Array<T >): void {
   const cell = currentCell(kind);
   const changed = !cell.isInitialized() || cell.dependenciesChanged( &dependencies);
   if (changed) {
     installEffectCell(cell, move effect, move dependencies);
   }
 }
-export function useEffect(effect: () =>() => void, dependencies: Array<u64 >): void {
-  useEffectCell(hookEffect, move effect, move dependencies);
+export function useEffect<T extends Equal<T> >(effect: () =>() => void, dependencies: Array<T >): void {
+  useEffectCell<T>(hookEffect, move effect, move dependencies);
 }
-export function useLayoutEffect(effect: () =>() => void, dependencies: Array<u64 >): void {
-  useEffectCell(hookLayoutEffect, move effect, move dependencies);
+export function useLayoutEffect<T extends Equal<T> >(effect: () =>() => void, dependencies: Array<T >): void {
+  useEffectCell<T>(hookLayoutEffect, move effect, move dependencies);
 }
 export function flushLayoutEffectsFor(root: &mut HookRoot): void {
   root.flushEffects(true);
@@ -892,7 +941,7 @@ export function flushPassiveEffects(): void {
 export function flushEffects(layout: bool): void {
   currentRoot().flushEffects(layout);
 }
-export function useMemo<T>(factory: () => T, dependencies: Array<u64 >): T {
+export function useMemo<T, Dependency extends Equal<Dependency> >(factory: () => T, dependencies: Array<Dependency >): T {
   const cell = currentCell(hookMemo);
   const changed = !cell.isInitialized() || cell.dependenciesChanged( &dependencies);
   if (changed) {
@@ -901,7 +950,7 @@ export function useMemo<T>(factory: () => T, dependencies: Array<u64 >): T {
   }
   return readCellValue<T>(cell);
 }
-export function useCallback<T>(callback: T, dependencies: Array<u64 >): T {
+export function useCallback<T, Dependency extends Equal<Dependency> >(callback: T, dependencies: Array<Dependency >): T {
   const cell = currentCell(hookCallback);
   if (!cell.isInitialized() || cell.dependenciesChanged( &dependencies)) {
     replaceCellValue<T>(cell, move callback);

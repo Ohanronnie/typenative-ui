@@ -1,7 +1,7 @@
 import { Text, View } from "../src/components";
 import { EmptyProps } from "../src/core/types";
 import { HeadlessRenderer } from "../src/renderer/headless";
-import { Element, hostChildAt, kindText } from "../src/tnx-runtime";
+import { Element, kindText } from "../src/tnx-runtime";
 
 function Root(props: EmptyProps): Element {
   return <View>
@@ -11,12 +11,7 @@ function Root(props: EmptyProps): Element {
 function main(): i32 {
   using renderer = new HeadlessRenderer();
   renderer.mount(<Root />);
-  const root = renderer.rootElement();
-  const child = hostChildAt(root, 0usize);
-  let valid = false;
-  if (child !== undefined) {
-    valid = child!.kind() === kindText() && child!.textLength() === 2usize;
-  }
+  const valid = renderer.hasKind(kindText()) && renderer.textLengthFirst(kindText()) === 2usize;
   renderer.unmount();
   if (valid) {
     return 0;

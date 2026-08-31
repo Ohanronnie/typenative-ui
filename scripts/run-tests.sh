@@ -57,8 +57,14 @@ build_and_run() {
 
   case "$sanitizer" in
     address)
-      run_timed "run-$name-$profile-address" \
-        env ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 "$binary"
+      if [ "$name" = "native-renderer" ] || [ "$name" = "native-components" ] || [ "$name" = "native-window" ]; then
+        run_timed "run-$name-$profile-address" \
+          env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+          LSAN_OPTIONS=suppressions="$root/scripts/macos-framework.lsan.supp" "$binary"
+      else
+        run_timed "run-$name-$profile-address" \
+          env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 "$binary"
+      fi
       ;;
     undefined)
       run_timed "run-$name-$profile-undefined" \
@@ -103,6 +109,7 @@ build_and_run public-api testing/public-api/typenative.json debug address
 build_and_run list testing/list/typenative.json debug address
 build_and_run native-renderer testing/native-renderer/typenative.json debug address
 build_and_run native-components testing/native-components/typenative.json debug address
+build_and_run native-window testing/native-window/typenative.json debug address
 
 build_and_run root testing/typenative.json optimized none
 build_and_run renderer-smoke testing/renderer-smoke/typenative.json optimized none
@@ -123,6 +130,7 @@ build_and_run list testing/list/typenative.json optimized none
 build_and_run benchmark benchmarks/typenative.json optimized address
 build_and_run native-renderer testing/native-renderer/typenative.json optimized none
 build_and_run native-components testing/native-components/typenative.json optimized none
+build_and_run native-window testing/native-window/typenative.json optimized none
 
 build_and_run headless-undefined testing/headless-events/typenative.json debug undefined
 build_and_run scheduler-undefined testing/scheduler/typenative.json debug undefined
@@ -131,7 +139,7 @@ build_and_run scheduler-thread testing/scheduler/typenative.json debug thread
 benchmark_binary="$bin_dir/benchmark-optimized-address"
 benchmark_output="$verification/benchmark-peak-output.log"
 benchmark_peak="$verification/benchmark-peak-time.log"
-if /usr/bin/time -l env ASAN_OPTIONS=detect_leaks=0:halt_on_error=1 \
+if /usr/bin/time -l env ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
   "$benchmark_binary" > "$benchmark_output" 2> "$benchmark_peak"; then
   benchmark_result=0
 else

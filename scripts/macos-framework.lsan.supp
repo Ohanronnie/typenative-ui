@@ -1,0 +1,19 @@
+# AppKit and its system services retain process-global caches after a headless
+# test process exits. These allocations are outside the TypeNative framework.
+leak:AppKit
+leak:Foundation
+leak:CoreFoundation
+leak:CoreGraphics
+leak:CoreText
+leak:CoreUI
+leak:SwiftUICore
+leak:libFontRegistry
+leak:ViewBridge
+leak:AppIntents
+leak:LinkServices
+leak:RunningBoardServices
+leak:BaseBoard
+leak:HIToolbox
+leak:ColorSync
+leak:libobjc.A.dylib
+leak:libdispatch.dylib

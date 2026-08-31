@@ -6,17 +6,17 @@ reconciles keyed trees deterministically, and provides both a headless backend
 and a direct AppKit backend for macOS.
 
 The public entrypoint is [`src/index.tn`](src/index.tn). The implementation is
-split into the JSX runtime, hooks, reconciler, scheduler, Yoga layout adapter,
-accessibility helpers, animation helpers, and platform renderers. The canonical
-JSX runtime exports `jsx`, `jsxs`, and `fragment`; the compiler selects it from
-`typenative.json`.
+split into the TNX runtime, hooks, reconciler, scheduler, Yoga layout adapter,
+accessibility helpers, animation helpers, and the macOS renderer. The canonical
+TNX runtime exports `createElement`, `createElements`, and `createFragment`; the
+compiler selects it from `typenative.json`.
 Layout-specific types and the Yoga adapter are also available directly from
 `src/layout/layout.tn` and `src/layout/yoga.tn`.
 
 ## Build the macOS example
 
 The repository targets Apple arm64 and uses the pinned TypeNative compiler
-revision `3ef10d4579e1c0765ad56fe787db37b9bdcb4c1a`.
+revision `b21b13108c9b9a5c35f69bb33b660a3e1a1a756b`.
 
 ```sh
 git clone https://github.com/Ohanronnie/typenative-ui.git
@@ -35,9 +35,8 @@ entering the AppKit event loop.
 
 ## A small component
 
-TypeNative state hooks return a typed `(value, setter)` pair. Effects use a
-`u64` dependency token because TypeNative does not use JavaScript dependency
-arrays.
+TypeNative state hooks return a typed `(value, setter)` pair. Effects use typed
+dependency values with equality defined by the dependency type.
 
 ```tnx
 import { Button, Element, Text, View, Window, runApp, useState } from "./src/index";

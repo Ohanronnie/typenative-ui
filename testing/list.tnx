@@ -1,4 +1,5 @@
 import { List } from "../src/components";
+import { points } from "../src/core/types";
 import { HeadlessRenderer } from "../src/renderer/headless";
 import { Element, createText, kindList } from "../src/tnx-runtime";
 
@@ -13,7 +14,7 @@ function recordRange(firstIndex: usize): void {
 }
 function main(): i32 {
   using renderer = new HeadlessRenderer();
-  const list = <List itemCount={10usize} renderItem={renderItem} itemHeight={24.0f32} firstVisibleIndex={5usize} visibleItemCount={2usize} overscan={1usize} onVisibleRangeChange={recordRange} />;
+  const list = <List itemCount={10usize} renderItem={renderItem} itemHeight={points(24.0f32)} firstVisibleIndex={5usize} visibleItemCount={2usize} overscan={1usize} onVisibleRangeChange={recordRange} />;
   renderer.mount(move list);
   const mounted = renderer.rootElement();
   if (mounted.kind() !== kindList() || !mounted.isVirtualized() || mounted.virtualItemCount() !== 10usize || mounted.virtualFirstIndex() !== 5usize || mounted.virtualItemHeight() !== 24.0f32 || mounted.childCount() !== 3usize) {

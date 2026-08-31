@@ -1,8 +1,8 @@
 {
-  "entry": "../native.tnx",
+  "entry": "../native-window.tnx",
   "target": "aarch64-apple-darwin",
   "jsx": {
-    "runtime": "../../src/tnx-runtime"
+    "runtime": "../src/tnx-runtime"
   },
   "link": {
     "libraries": ["yogacore"],

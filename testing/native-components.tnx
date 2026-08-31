@@ -1,4 +1,5 @@
 import { Button, Canvas, Dialog, Grid, Image, List, Menu, Progress, ScrollView, Slider, SplitView, Stack, Switch, Text, TextInput, Toolbar, View, Window } from "../src/components";
+import { points } from "../src/core/types";
 import { NativeRenderer } from "../src/platform/macos";
 import { Element, createText } from "../src/tnx-runtime";
 
@@ -22,10 +23,10 @@ function NativeComponents(props: EmptyProps): Element {
     <View>
       <Text accessibilityLabel="Greeting">Hello</Text>
       <Button onPress={noop}>Button</Button>
-      <TextInput placeholder="Name" onChange={noopText} /><Image source="" alt="Image" /><ScrollView>
+      <TextInput placeholder="Name" onChangeText={noopText} /><Image source="" alt="Image" /><ScrollView>
         <Text>Scroll</Text>
       </ScrollView>
-      <List itemCount={20usize} renderItem={renderItem} itemHeight={24.0f32} visibleItemCount={3usize} overscan={1usize} onVisibleRangeChange={noopRange} /><Switch value={true} onChange={noopBoolean} /><Slider value={0.5f32} minimumValue={0.0f32} maximumValue={1.0f32} onChange={noopNumeric} /><Progress value={0.5f32} minimumValue={0.0f32} maximumValue={1.0f32} /><Menu title="File" /><Toolbar>
+      <List itemCount={20usize} renderItem={renderItem} itemHeight={points(24.0f32)} visibleItemCount={3usize} overscan={1usize} onVisibleRangeChange={noopRange} /><Switch value={true} onChange={noopBoolean} /><Slider value={0.5f32} minimumValue={0.0f32} maximumValue={1.0f32} onChange={noopNumeric} /><Progress value={0.5f32} minimumValue={0.0f32} maximumValue={1.0f32} /><Menu title="File" /><Toolbar>
         <Text>Toolbar</Text>
       </Toolbar>
       <Dialog title="Dialog">

@@ -1,6 +1,6 @@
 import { Disposable } from "std/core";
 import { Reconciler } from "../reconciler/reconciler";
-import { Element, dispatchPress, hostChildAt, isFocused, kindButton, kindText } from "../tnx-runtime";
+import { AccessibilityRole, Element, accessibilityRoleCode, dispatchPress, hostChildAt, isFocused } from "../tnx-runtime";
 
 export class HeadlessRenderer implements Disposable {
   private reconciler: Reconciler;
@@ -106,17 +106,11 @@ export class HeadlessRenderer implements Disposable {
     }
     return findFocused(this.reconciler.rootElement(), kind);
   }
-  public accessibilityRole(element: &Element): i32 {
-    if (element.kind() === 5i32) {
-      return 1;
-    }
-    if (element.kind() === kindButton()) {
-      return 4;
-    }
-    if (element.kind() === kindText()) {
-      return 3;
-    }
-    return 2;
+  public accessibilityRole(element: &Element): AccessibilityRole {
+    return element.accessibilityRole();
+  }
+  public hasAccessibilityRole(element: &Element, role: AccessibilityRole): bool {
+    return element.accessibilityRoleCode() === accessibilityRoleCode( &role);
   }
   public accessibilityLabelLength(element: &Element): usize {
     return element.textLength();

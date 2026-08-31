@@ -61,15 +61,7 @@ function Counter(props: CounterProps): Element {
   const referenceValue = reference.read();
   const deferred = useDeferredValue<i32>(current);
   const identifier = useId();
-  const increment = move(): void => {
-    setState(current + 1i32);
-    dispatch(1i32);
-    unsafe {
-      latestReduced = reduced;
-    }
-  };
-  const callback = useCallback(increment, stableDependencies());
-  const memoized = useMemo<i32>(move(): i32 => current, stableDependencies());
+  const memoized = useMemo<i32, u64>(move(): i32 => current, stableDependencies());
   useLayoutEffect(layoutEffect, stableDependencies());
   useEffect(passiveEffect, stableDependencies());
   unsafe {
@@ -88,6 +80,14 @@ function Counter(props: CounterProps): Element {
   if (current !== 0i32) {
     label = "Count: 1";
   }
+  const increment = move(): void => {
+    setState(current + 1i32);
+    dispatch(1i32);
+    unsafe {
+      latestReduced = reduced;
+    }
+  };
+  const callback = useCallback(increment, stableDependencies());
   return <View>
     <Text>
       {

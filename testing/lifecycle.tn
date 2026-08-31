@@ -35,9 +35,8 @@ function Probe(props: StructMarker): Element {
   return createText("ok");
 }
 function probeElement(): Element {
-  const key: string | undefined = undefined;
   return createElement<StructMarker>(Probe, {
-  }, move key);
+  }, keyNone());
 }
 function unkeyedTree(count: i32): Element {
   const children = new Array<Element>({

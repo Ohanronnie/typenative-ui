@@ -12,6 +12,154 @@ declare extern "C" {
 export enum ElementKind {
   Empty, Component, View, Text, Button, Window, Fragment, TextInput, Image, ScrollView, List, Switch, Slider, Progress, Menu, Dialog, Toolbar, SplitView, Stack, Grid, Canvas,
 }
+export enum Length {
+  Auto, Points(f32), Percent(f32),
+}
+export enum FlexDirection {
+  Row, Column,
+}
+export enum Align {
+  Auto, Start, Center, End, Stretch,
+}
+export enum Justify {
+  Start, Center, End, SpaceBetween, SpaceAround, SpaceEvenly,
+}
+export enum PositionType {
+  Relative, Absolute,
+}
+export enum Display {
+  Flex, None,
+}
+export enum Overflow {
+  Visible, Hidden, Scroll,
+}
+export enum AccessibilityRole {
+  None, Window, Group, StaticText, Button, Image, TextField, List, Slider, Checkbox, Dialog, Toolbar,
+}
+export enum KeyboardType {
+  Default, Ascii, Numbers, Decimal, Email, Url, Phone,
+}
+export function keyboardTypeCode(value: &KeyboardType): i32 {
+  unsafe {
+    return switch( * value) {
+      case KeyboardType.Default: 0i32, case KeyboardType.Ascii: 1i32, case KeyboardType.Numbers: 2i32, case KeyboardType.Decimal: 3i32, case KeyboardType.Email: 4i32, case KeyboardType.Url: 5i32, case KeyboardType.Phone: 6i32,
+    };
+  }
+}
+export enum WindowClosePolicy {
+  Allow, Prevent,
+}
+function windowClosePolicyAllowed(value: WindowClosePolicy): bool {
+  return switch(value) {
+    case WindowClosePolicy.Allow: true, case WindowClosePolicy.Prevent: false, default: false,
+  };
+}
+export struct TextSelection {
+  public start: usize;
+  public end: usize;
+}
+export function accessibilityRoleCode(value: &AccessibilityRole): i32 {
+  unsafe {
+    return switch( * value) {
+      case AccessibilityRole.None: 0i32, case AccessibilityRole.Window: 1i32, case AccessibilityRole.Group: 2i32, case AccessibilityRole.StaticText: 3i32, case AccessibilityRole.Button: 4i32, case AccessibilityRole.Image: 5i32, case AccessibilityRole.TextField: 6i32, case AccessibilityRole.List: 7i32, case AccessibilityRole.Slider: 8i32, case AccessibilityRole.Checkbox: 9i32, case AccessibilityRole.Dialog: 10i32, case AccessibilityRole.Toolbar: 11i32,
+    };
+  }
+}
+function defaultAccessibilityRole(kind: i32): AccessibilityRole {
+  if (kind === 5i32) {
+    return AccessibilityRole.Window;
+  }
+  if (kind === 2i32 || kind === 17i32 || kind === 18i32 || kind === 19i32 || kind === 20i32) {
+    return AccessibilityRole.Group;
+  }
+  if (kind === 3i32) {
+    return AccessibilityRole.StaticText;
+  }
+  if (kind === 4i32) {
+    return AccessibilityRole.Button;
+  }
+  if (kind === 7i32) {
+    return AccessibilityRole.TextField;
+  }
+  if (kind === 8i32) {
+    return AccessibilityRole.Image;
+  }
+  if (kind === 9i32 || kind === 10i32) {
+    return AccessibilityRole.List;
+  }
+  if (kind === 11i32) {
+    return AccessibilityRole.Checkbox;
+  }
+  if (kind === 12i32) {
+    return AccessibilityRole.Slider;
+  }
+  if (kind === 15i32) {
+    return AccessibilityRole.Dialog;
+  }
+  if (kind === 16i32) {
+    return AccessibilityRole.Toolbar;
+  }
+  return AccessibilityRole.None;
+}
+export function lengthKind(value: &Length): i32 {
+  unsafe {
+    return switch( * value) {
+      case Length.Auto: 0i32, case Length.Points(_): 1i32, case Length.Percent(_): 2i32,
+    };
+  }
+}
+export function lengthValue(value: &Length): f32 {
+  unsafe {
+    return switch( * value) {
+      case Length.Auto: 0.0f32, case Length.Points(points): points, case Length.Percent(percent): percent,
+    };
+  }
+}
+export function lengthEquals(left: &Length, right: &Length): bool {
+  return lengthKind(left) === lengthKind(right) && lengthValue(left) === lengthValue(right);
+}
+export function flexDirectionCode(value: &FlexDirection): i32 {
+  unsafe {
+    return switch( * value) {
+      case FlexDirection.Row: 0i32, case FlexDirection.Column: 1i32,
+    };
+  }
+}
+export function alignCode(value: &Align): i32 {
+  unsafe {
+    return switch( * value) {
+      case Align.Auto: 0i32, case Align.Start: 1i32, case Align.Center: 2i32, case Align.End: 3i32, case Align.Stretch: 4i32,
+    };
+  }
+}
+export function justifyCode(value: &Justify): i32 {
+  unsafe {
+    return switch( * value) {
+      case Justify.Start: 0i32, case Justify.Center: 1i32, case Justify.End: 2i32, case Justify.SpaceBetween: 3i32, case Justify.SpaceAround: 4i32, case Justify.SpaceEvenly: 5i32,
+    };
+  }
+}
+export function positionTypeCode(value: &PositionType): i32 {
+  unsafe {
+    return switch( * value) {
+      case PositionType.Relative: 0i32, case PositionType.Absolute: 1i32,
+    };
+  }
+}
+export function displayCode(value: &Display): i32 {
+  unsafe {
+    return switch( * value) {
+      case Display.Flex: 0i32, case Display.None: 1i32,
+    };
+  }
+}
+export function overflowCode(value: &Overflow): i32 {
+  unsafe {
+    return switch( * value) {
+      case Overflow.Visible: 0i32, case Overflow.Hidden: 1i32, case Overflow.Scroll: 2i32,
+    };
+  }
+}
 export struct Key {
   public kind: i32;
   public text: string;
@@ -33,38 +181,38 @@ export struct Key {
   }
 }
 export struct StyleSnapshot {
-  public width: f32;
-  public height: f32;
-  public minWidth: f32;
-  public minHeight: f32;
-  public maxWidth: f32;
-  public maxHeight: f32;
-  public margin: f32;
-  public padding: f32;
-  public marginTop: f32;
-  public marginRight: f32;
-  public marginBottom: f32;
-  public marginLeft: f32;
-  public paddingTop: f32;
-  public paddingRight: f32;
-  public paddingBottom: f32;
-  public paddingLeft: f32;
-  public gap: f32;
+  public width: Length;
+  public height: Length;
+  public minWidth: Length;
+  public minHeight: Length;
+  public maxWidth: Length;
+  public maxHeight: Length;
+  public margin: Length;
+  public padding: Length;
+  public marginTop: Length;
+  public marginRight: Length;
+  public marginBottom: Length;
+  public marginLeft: Length;
+  public paddingTop: Length;
+  public paddingRight: Length;
+  public paddingBottom: Length;
+  public paddingLeft: Length;
+  public gap: Length;
   public flex: f32;
   public flexGrow: f32;
   public flexShrink: f32;
-  public flexBasis: f32;
-  public flexDirection: i32;
-  public alignItems: i32;
-  public alignSelf: i32;
-  public justifyContent: i32;
-  public positionType: i32;
-  public insetTop: f32;
-  public insetRight: f32;
-  public insetBottom: f32;
-  public insetLeft: f32;
-  public display: i32;
-  public overflow: i32;
+  public flexBasis: Length;
+  public flexDirection: FlexDirection;
+  public alignItems: Align;
+  public alignSelf: Align;
+  public justifyContent: Justify;
+  public positionType: PositionType;
+  public insetTop: Length;
+  public insetRight: Length;
+  public insetBottom: Length;
+  public insetLeft: Length;
+  public display: Display;
+  public overflow: Overflow;
   public aspectRatio: f32;
   public hasMarginEdges: bool;
   public hasPaddingEdges: bool;
@@ -78,7 +226,7 @@ export struct ComponentId {
 }
 export function defaultStyleSnapshot(): StyleSnapshot {
   return {
-    width: 0.0f32, height: 0.0f32, minWidth: 0.0f32, minHeight: 0.0f32, maxWidth: 0.0f32, maxHeight: 0.0f32, margin: 0.0f32, padding: 0.0f32, marginTop: 0.0f32, marginRight: 0.0f32, marginBottom: 0.0f32, marginLeft: 0.0f32, paddingTop: 0.0f32, paddingRight: 0.0f32, paddingBottom: 0.0f32, paddingLeft: 0.0f32, gap: 0.0f32, flex: 0.0f32, flexGrow: 0.0f32, flexShrink: 1.0f32, flexBasis: 0.0f32, flexDirection: 1i32, alignItems: 4i32, alignSelf: 0i32, justifyContent: 0i32, positionType: 0i32, insetTop: 0.0f32, insetRight: 0.0f32, insetBottom: 0.0f32, insetLeft: 0.0f32, display: 0i32, overflow: 0i32, aspectRatio: 0.0f32, hasMarginEdges: false, hasPaddingEdges: false, revision: 0u64,
+    width: Length.Auto, height: Length.Auto, minWidth: Length.Auto, minHeight: Length.Auto, maxWidth: Length.Auto, maxHeight: Length.Auto, margin: Length.Points(0.0f32), padding: Length.Points(0.0f32), marginTop: Length.Points(0.0f32), marginRight: Length.Points(0.0f32), marginBottom: Length.Points(0.0f32), marginLeft: Length.Points(0.0f32), paddingTop: Length.Points(0.0f32), paddingRight: Length.Points(0.0f32), paddingBottom: Length.Points(0.0f32), paddingLeft: Length.Points(0.0f32), gap: Length.Points(0.0f32), flex: 0.0f32, flexGrow: 0.0f32, flexShrink: 1.0f32, flexBasis: Length.Auto, flexDirection: FlexDirection.Column, alignItems: Align.Stretch, alignSelf: Align.Auto, justifyContent: Justify.Start, positionType: PositionType.Relative, insetTop: Length.Auto, insetRight: Length.Auto, insetBottom: Length.Auto, insetLeft: Length.Auto, display: Display.Flex, overflow: Overflow.Visible, aspectRatio: 0.0f32, hasMarginEdges: false, hasPaddingEdges: false, revision: 0u64,
   };
 }
 function emptyKey(): Key {
@@ -107,6 +255,9 @@ export class ElementNode implements Disposable {
   public render?: () => Element;
   public action?: () => void;
   public textChange?: (string) => void;
+  public submit?: () => void;
+  public focus?: () => void;
+  public blur?: () => void;
   public booleanChange?: (bool) => void;
   public numericChange?: (f32) => void;
   public value: string;
@@ -114,7 +265,7 @@ export class ElementNode implements Disposable {
   public imageSource: string;
   public accessibilityLabel: string;
   public accessibilityLabelPresent: bool;
-  public accessibilityRole: i32;
+  public accessibilityRole: AccessibilityRole;
   public accessibilityEnabled: bool;
   public selected: bool;
   public checked: bool;
@@ -127,6 +278,13 @@ export class ElementNode implements Disposable {
   public selectionEnd: usize;
   public hasSelection: bool;
   public hasValue: bool;
+  public controlled: bool;
+  public editable: bool;
+  public autoFocus: bool;
+  public multiline: bool;
+  public keyboardType: KeyboardType;
+  public closePolicy: WindowClosePolicy;
+  public closeAction?: () => void;
   public focused: bool;
   public virtualized: bool;
   public virtualItemCount: usize;
@@ -150,7 +308,7 @@ export class ElementNode implements Disposable {
     this.imageSource = String("");
     this.accessibilityLabel = String("");
     this.accessibilityLabelPresent = false;
-    this.accessibilityRole = 0i32;
+    this.accessibilityRole = defaultAccessibilityRole(kind);
     this.accessibilityEnabled = true;
     this.selected = false;
     this.checked = false;
@@ -163,6 +321,13 @@ export class ElementNode implements Disposable {
     this.selectionEnd = 0usize;
     this.hasSelection = false;
     this.hasValue = false;
+    this.controlled = false;
+    this.editable = true;
+    this.autoFocus = false;
+    this.multiline = false;
+    this.keyboardType = KeyboardType.Default;
+    this.closePolicy = WindowClosePolicy.Allow;
+    this.closeAction = undefined;
     this.focused = false;
     this.virtualized = false;
     this.virtualItemCount = 0usize;
@@ -339,6 +504,16 @@ export struct Element {
   public childCount(): usize {
     return this.node.children.length;
   }
+  public appendChild(child: Element): void {
+    this.node.children.push(move child);
+  }
+  public clearChildren(): void {
+    this.node.children.clear();
+  }
+  public replaceChildren(children: Array<Element >): void {
+    this.node.children.clear();
+    this.node.children = move children;
+  }
   public childAt(index: usize): &Element | undefined {
     return this.node.children.at(index);
   }
@@ -412,10 +587,47 @@ export struct Element {
   public setAction(action: () => void): void {
     this.node.action = move action;
   }
+  public hasSubmit(): bool {
+    return this.node.submit !== undefined;
+  }
+  public invokeSubmit(): bool {
+    if (this.node.submit !== undefined) {
+      this.node.submit!();
+      return true;
+    }
+    return false;
+  }
+  public setSubmit(submit: () => void): void {
+    this.node.submit = move submit;
+  }
+  public hasFocusChange(): bool {
+    return this.node.focus !== undefined || this.node.blur !== undefined;
+  }
+  public invokeFocusChange(focused: bool): bool {
+    if (focused && this.node.focus !== undefined) {
+      this.node.focus!();
+      return true;
+    }
+    if (!focused && this.node.blur !== undefined) {
+      this.node.blur!();
+      return true;
+    }
+    return false;
+  }
+  public setFocus(change: () => void): void {
+    this.node.focus = move change;
+  }
+  public setBlur(change: () => void): void {
+    this.node.blur = move change;
+  }
   public hasTextChange(): bool {
     return this.node.textChange !== undefined;
   }
   public invokeTextChange(value: string): bool {
+    if (!this.node.controlled) {
+      this.node.value = value.clone();
+      this.node.hasValue = true;
+    }
     if (this.node.textChange !== undefined) {
       this.node.textChange!(move value);
       return true;
@@ -424,6 +636,63 @@ export struct Element {
   }
   public setTextChange(change: (string) => void): void {
     this.node.textChange = move change;
+  }
+  public setControlled(value: bool): void {
+    this.node.controlled = value;
+  }
+  public isControlled(): bool {
+    return this.node.controlled;
+  }
+  public setEditable(value: bool): void {
+    this.node.editable = value;
+  }
+  public isEditable(): bool {
+    return this.node.editable;
+  }
+  public setAutoFocus(value: bool): void {
+    this.node.autoFocus = value;
+  }
+  public autoFocus(): bool {
+    return this.node.autoFocus;
+  }
+  public setMultiline(value: bool): void {
+    this.node.multiline = value;
+  }
+  public isMultiline(): bool {
+    return this.node.multiline;
+  }
+  public setKeyboardType(value: KeyboardType): void {
+    this.node.keyboardType = value;
+  }
+  public keyboardType(): KeyboardType {
+    return this.node.keyboardType;
+  }
+  public keyboardTypeCode(): i32 {
+    return switch(this.node.keyboardType) {
+      case KeyboardType.Default: 0i32, case KeyboardType.Ascii: 1i32, case KeyboardType.Numbers: 2i32, case KeyboardType.Decimal: 3i32, case KeyboardType.Email: 4i32, case KeyboardType.Url: 5i32, case KeyboardType.Phone: 6i32,
+    };
+  }
+  public setClosePolicy(value: WindowClosePolicy): void {
+    this.node.closePolicy = value;
+  }
+  public closePolicy(): WindowClosePolicy {
+    return this.node.closePolicy;
+  }
+  public allowsClose(): bool {
+    return windowClosePolicyAllowed(this.node.closePolicy);
+  }
+  public hasCloseAction(): bool {
+    return this.node.closeAction !== undefined;
+  }
+  public invokeClose(): bool {
+    if (this.node.closeAction !== undefined) {
+      this.node.closeAction!();
+      return true;
+    }
+    return false;
+  }
+  public setCloseAction(action: () => void): void {
+    this.node.closeAction = move action;
   }
   public hasBooleanChange(): bool {
     return this.node.booleanChange !== undefined;
@@ -506,11 +775,14 @@ export struct Element {
   public hasAccessibilityLabel(): bool {
     return this.node.accessibilityLabelPresent;
   }
-  public setAccessibilityRole(value: i32): void {
+  public setAccessibilityRole(value: AccessibilityRole): void {
     this.node.accessibilityRole = value;
   }
-  public accessibilityRole(): i32 {
+  public accessibilityRole(): AccessibilityRole {
     return this.node.accessibilityRole;
+  }
+  public accessibilityRoleCode(): i32 {
+    return accessibilityRoleCode( &this.node.accessibilityRole);
   }
   public setAccessibilityEnabled(value: bool): void {
     this.node.accessibilityEnabled = value;
@@ -567,6 +839,20 @@ export struct Element {
     this.node.selectionStart = start;
     this.node.selectionEnd = end;
     this.node.hasSelection = true;
+  }
+  public preserveInputState(previous: &Element): void {
+    if (this.node.controlled) {
+      return;
+    }
+    if (previous.node.hasValue) {
+      this.node.value = previous.node.value.clone();
+      this.node.hasValue = true;
+    }
+    if (previous.node.hasSelection) {
+      this.node.selectionStart = previous.node.selectionStart;
+      this.node.selectionEnd = previous.node.selectionEnd;
+      this.node.hasSelection = true;
+    }
   }
   public hasSelection(): bool {
     return this.node.hasSelection;
@@ -652,6 +938,9 @@ export function keyText(value: string): Key {
     kind: 1i32, text: move value, integer: 0u64, identity: identity,
   };
 }
+export function keyTextRef(value: &str): Key {
+  return keyText(String(value));
+}
 export function keyInteger(value: u64): Key {
   return {
     kind: 2i32, text: String(""), integer: value, identity: value,
@@ -660,17 +949,11 @@ export function keyInteger(value: u64): Key {
 export function keyNone(): Key {
   return emptyKey();
 }
-function optionalKey(value: string | undefined): Key {
+function optionalKey(value: Key | undefined): Key {
   if (value === undefined) {
     return emptyKey();
   }
-  return keyText(move value!);
-}
-function optionalBorrowedKey(value: &str | undefined): Key {
-  if (value === undefined) {
-    return emptyKey();
-  }
-  return keyText(String(value!));
+  return value!;
 }
 export function createComponent<Props>(typeId: u64, component: (Props) => Element, properties: Props, key: Key): Element {
   const node = new ElementNode(kindFunction(), typeId, move key, String(""), emptyChildren());
@@ -678,20 +961,11 @@ export function createComponent<Props>(typeId: u64, component: (Props) => Elemen
   node.render = move(): Element => component(move properties);
   return Element.fromNode(move node);
 }
-export function createElement<Props>(component: (Props) => Element, properties: Props, key: string | undefined): Element {
+export function createElement<Props>(component: (Props) => Element, properties: Props, key: Key | undefined): Element {
   return createComponent<Props>(1u64, component, move properties, optionalKey(move key));
 }
-export function createElements<Props>(component: (Props) => Element, properties: Props, key: string | undefined): Element {
+export function createElements<Props>(component: (Props) => Element, properties: Props, key: Key | undefined): Element {
   return createElement<Props>(component, move properties, move key);
-}
-export function jsx<Props>(component: (Props) => Element, properties: Props, key: &str | undefined): Element {
-  return createComponent<Props>(1u64, component, move properties, optionalBorrowedKey(move key));
-}
-export function jsxs<Props>(component: (Props) => Element, properties: Props, key: &str | undefined): Element {
-  return createComponent<Props>(1u64, component, move properties, optionalBorrowedKey(move key));
-}
-export function fragment(children: Array<Element >): Element {
-  return createFragment(move children);
 }
 function createFragmentArray(children: Array<Element >): Element {
   return Element.fromNode(new ElementNode(kindFragment(), 6u64, emptyKey(), String(""), move children));

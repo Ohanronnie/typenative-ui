@@ -1,4 +1,4 @@
-import { Array } from "std/collections";
+import { Deque, Set } from "std/collections";
 import { Disposable } from "std/core";
 import { Condition, Mutex, condition } from "std/sync";
 import { threadId } from "std/thread";
@@ -6,85 +6,138 @@ import { threadId } from "std/thread";
 export enum Priority {
   Immediate, UserBlocking, Normal, Low, Idle,
 }
-function priorityValue(priority: Priority): i32 {
+function highPriority(priority: Priority): bool {
   return switch(priority) {
-    case Priority.Immediate: 0i32, case Priority.UserBlocking: 1i32, case Priority.Normal: 2i32, case Priority.Low: 3i32, case Priority.Idle: 4i32,
+    case Priority.Immediate: true, case Priority.UserBlocking: true, case Priority.Normal: false, case Priority.Low: false, case Priority.Idle: false,
   };
 }
-function highPriority(priority: i32): bool {
-  return priority <= 1i32;
-}
 export struct WorkItem {
-  public priority: i32;
+  public priority: Priority;
   public sequence: u64;
   public callback: () => void;
-  public cancelled: bool;
 }
 class WorkQueue {
-  private items: Array<WorkItem>;
+  private immediate: Deque<WorkItem>;
+  private userBlocking: Deque<WorkItem>;
+  private normal: Deque<WorkItem>;
+  private low: Deque<WorkItem>;
+  private idle: Deque<WorkItem>;
+  private scheduled: Set<u64>;
+  private cancelled: Set<u64>;
+  private queuedCount: usize;
+  private liveCount: usize;
   public constructor() {
-    this.items = new Array<WorkItem>({
+    this.immediate = new Deque<WorkItem>({
       capacity: 0usize
     });
+    this.userBlocking = new Deque<WorkItem>({
+      capacity: 0usize
+    });
+    this.normal = new Deque<WorkItem>({
+      capacity: 0usize
+    });
+    this.low = new Deque<WorkItem>({
+      capacity: 0usize
+    });
+    this.idle = new Deque<WorkItem>({
+      capacity: 0usize
+    });
+    this.scheduled = new Set<u64>({
+      capacity: 0usize
+    });
+    this.cancelled = new Set<u64>({
+      capacity: 0usize
+    });
+    this.queuedCount = 0usize;
+    this.liveCount = 0usize;
   }
   public push(item: WorkItem): void {
-    this.items.push(move item);
+    const sequence = item.sequence;
+    switch(item.priority) {
+      case Priority.Immediate: this.immediate.pushBack(move item), case Priority.UserBlocking: this.userBlocking.pushBack(move item), case Priority.Normal: this.normal.pushBack(move item), case Priority.Low: this.low.pushBack(move item), case Priority.Idle: this.idle.pushBack(move item),
+    };
+    this.scheduled.add(sequence);
+    this.queuedCount = this.queuedCount + 1usize;
+    this.liveCount = this.liveCount + 1usize;
   }
-  public count(): usize {
-    return this.items.length;
+  private dequeue(highStreak: usize): WorkItem | undefined {
+    if (highStreak >= 8usize) {
+      if (this.normal.length > 0usize) {
+        return this.normal.popFront();
+      }
+      if (this.low.length > 0usize) {
+        return this.low.popFront();
+      }
+      if (this.idle.length > 0usize) {
+        return this.idle.popFront();
+      }
+    }
+    if (this.immediate.length > 0usize) {
+      return this.immediate.popFront();
+    }
+    if (this.userBlocking.length > 0usize) {
+      return this.userBlocking.popFront();
+    }
+    if (this.normal.length > 0usize) {
+      return this.normal.popFront();
+    }
+    if (this.low.length > 0usize) {
+      return this.low.popFront();
+    }
+    if (this.idle.length > 0usize) {
+      return this.idle.popFront();
+    }
+    return undefined;
   }
-  public at(index: usize): &WorkItem | undefined {
-    return this.items.at(index);
-  }
-  public atMut(index: usize): &mut WorkItem | undefined {
-    return this.items.atMut(index);
-  }
-  public removeAt(index: usize): WorkItem | undefined {
-    return this.items.removeAt(index);
+  public take(highStreak: usize): WorkItem | undefined {
+    while (this.queuedCount > 0usize) {
+      const item = this.dequeue(highStreak);
+      if (item === undefined) {
+        return undefined;
+      }
+      const sequence = item!.sequence;
+      this.queuedCount = this.queuedCount - 1usize;
+      this.scheduled.delete( &sequence);
+      if (this.cancelled.has( &sequence)) {
+        this.cancelled.delete( &sequence);
+        continue;
+      }
+      this.liveCount = this.liveCount - 1usize;
+      return item;
+    }
+    return undefined;
   }
   public clear(): void {
-    this.items.clear();
+    this.immediate.clear();
+    this.userBlocking.clear();
+    this.normal.clear();
+    this.low.clear();
+    this.idle.clear();
+    this.scheduled.clear();
+    this.cancelled.clear();
+    this.queuedCount = 0usize;
+    this.liveCount = 0usize;
   }
   public hasLive(): bool {
-    let index: usize = 0;
-    while (index<this.items.length) {
-      const item = this.items.at(index);
-      if (item !== undefined && !item!.cancelled) {
-        return true;
-      }
-      index = index + 1usize;
-    }
-    return false;
+    return this.liveCount > 0usize;
   }
-  public select(highStreak: usize): usize | undefined {
-    if (this.items.length === 0usize) {
-      return undefined;
+  public pendingCount(): usize {
+    return this.liveCount;
+  }
+  public cancel(sequence: u64): bool {
+    if (!this.scheduled.has( &sequence)) {
+      return false;
     }
-    let selected: usize | undefined = undefined;
-    let index: usize = 0;
-    while (index<this.items.length) {
-      const candidate = this.items.at(index);
-      if (candidate !== undefined && !candidate!.cancelled) {
-        if (selected === undefined) {
-          selected = index;
-        } else {
-          const current = this.items.at(selected!);
-          if (current !== undefined) {
-            const fair = highStreak >= 8usize && highPriority(current!.priority) && !highPriority(candidate!.priority);
-            if (fair || candidate!.priority<current!.priority ||(candidate!.priority === current!.priority && candidate!.sequence<current!.sequence)) {
-              selected = index;
-            }
-          }
-        }
-      }
-      index = index + 1usize;
+    if (!this.cancelled.add(sequence)) {
+      return false;
     }
-    return selected;
+    this.liveCount = this.liveCount - 1usize;
+    return true;
   }
 }
-function queueItem(queue: &mut WorkQueue, priority: i32, sequence: u64, callback: () => void): void {
+function queueItem(queue: &mut WorkQueue, priority: Priority, sequence: u64, callback: () => void): void {
   queue.push({
-    priority: priority, sequence: sequence, callback: move callback, cancelled: false,
+    priority: priority, sequence: sequence, callback: move callback,
   });
 }
 export class Scheduler implements Disposable {
@@ -120,7 +173,7 @@ export class Scheduler implements Disposable {
     }
     const sequence = this.nextSequence;
     this.nextSequence = this.nextSequence + 1u64;
-    queueItem(locked.getMut(), priorityValue(priority), sequence, move callback);
+    queueItem(locked.getMut(), priority, sequence, move callback);
     this.wakeup.signal();
     return sequence;
   }
@@ -144,11 +197,7 @@ export class Scheduler implements Disposable {
     let item: WorkItem | undefined = undefined;
     {
       using locked = this.queue.lock();
-      const selected = locked.getMut().select(this.highStreak);
-      if (selected === undefined) {
-        return false;
-      }
-      item = locked.getMut().removeAt(selected!);
+      item = locked.getMut().take(this.highStreak);
       if (item !== undefined) {
         if (highPriority(item!.priority)) {
           this.highStreak = this.highStreak + 1usize;
@@ -161,9 +210,7 @@ export class Scheduler implements Disposable {
     if (item === undefined) {
       return false;
     }
-    if (!item!.cancelled) {
-      item!.callback();
-    }
+    item!.callback();
     this.running = false;
     return true;
   }
@@ -182,30 +229,11 @@ export class Scheduler implements Disposable {
   }
   public cancel(sequence: u64): bool {
     using locked = this.queue.lock();
-    let index: usize = 0;
-    while (index<locked.getMut().count()) {
-      const item = locked.getMut().atMut(index);
-      if (item !== undefined && item!.sequence === sequence && !item!.cancelled) {
-        item!.cancelled = true;
-        locked.getMut().removeAt(index);
-        return true;
-      }
-      index = index + 1usize;
-    }
-    return false;
+    return locked.getMut().cancel(sequence);
   }
   public pendingCount(): usize {
     using locked = this.queue.lock();
-    let count: usize = 0;
-    let index: usize = 0;
-    while (index<locked.getMut().count()) {
-      const item = locked.getMut().at(index);
-      if (item !== undefined && !item!.cancelled) {
-        count = count + 1usize;
-      }
-      index = index + 1usize;
-    }
-    return count;
+    return locked.getMut().pendingCount();
   }
   public clear(): void {
     if (!this.ownerOnly()) {
@@ -259,24 +287,14 @@ export class UiScheduler implements Disposable {
     const sequence = this.nextSequence;
     this.nextSequence = this.nextSequence + 1u64;
     locked.getMut().push({
-      priority: priorityValue(priority), sequence: sequence, callback: move callback, cancelled: false,
+      priority: priority, sequence: sequence, callback: move callback,
     });
     this.wakeup.signal();
     return sequence;
   }
   public cancel(sequence: u64): bool {
     using locked = this.queue.lock();
-    let index: usize = 0;
-    while (index<locked.getMut().count()) {
-      const item = locked.getMut().atMut(index);
-      if (item !== undefined && item!.sequence === sequence && !item!.cancelled) {
-        item!.cancelled = true;
-        locked.getMut().removeAt(index);
-        return true;
-      }
-      index = index + 1usize;
-    }
-    return false;
+    return locked.getMut().cancel(sequence);
   }
   public waitForWork(): bool {
     using locked = this.queue.lock();
@@ -296,11 +314,10 @@ export class UiScheduler implements Disposable {
       let job: WorkItem | undefined = undefined;
       {
         using locked = this.queue.lock();
-        const selected = locked.getMut().select(this.highStreak);
-        if (selected === undefined) {
+        job = locked.getMut().take(this.highStreak);
+        if (job === undefined) {
           break;
         }
-        job = locked.getMut().removeAt(selected!);
         if (job !== undefined) {
           if (highPriority(job!.priority)) {
             this.highStreak = this.highStreak + 1usize;
@@ -310,9 +327,7 @@ export class UiScheduler implements Disposable {
         }
       }
       if (job !== undefined) {
-        if (!job!.cancelled) {
-          job!.callback();
-        }
+        job!.callback();
         count = count + 1usize;
       }
     }
@@ -320,16 +335,7 @@ export class UiScheduler implements Disposable {
   }
   public pendingCount(): usize {
     using locked = this.queue.lock();
-    let count: usize = 0;
-    let index: usize = 0;
-    while (index<locked.getMut().count()) {
-      const job = locked.getMut().at(index);
-      if (job !== undefined && !job!.cancelled) {
-        count = count + 1usize;
-      }
-      index = index + 1usize;
-    }
-    return count;
+    return locked.getMut().pendingCount();
   }
   public close(): void {
     if (!this.ownerOnly()) {

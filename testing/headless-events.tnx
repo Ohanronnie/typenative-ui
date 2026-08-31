@@ -1,7 +1,7 @@
 import { Button } from "../src/components";
 import { EmptyProps } from "../src/core/types";
 import { HeadlessRenderer } from "../src/renderer/headless";
-import { Element, kindButton } from "../src/tnx-runtime";
+import { AccessibilityRole, Element, kindButton } from "../src/tnx-runtime";
 
 static mut presses: i32 = 0;
 function hit(): void {
@@ -20,7 +20,7 @@ function main(): i32 {
     renderer.unmount();
     return 10;
   }
-  if (renderer.accessibilityRole(button) !== 4 || renderer.accessibilityLabelLength(button) !== 9usize) {
+  if (!renderer.hasAccessibilityRole(button, AccessibilityRole.Button) || renderer.accessibilityLabelLength(button) !== 9usize) {
     renderer.unmount();
     return 11;
   }

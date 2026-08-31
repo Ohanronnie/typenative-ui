@@ -1,4 +1,6 @@
+import { Array } from "std/collections";
 import { Priority, Scheduler, UiScheduler } from "../src/scheduler/scheduler";
+
 static mut order: i32 = 0;
 static mut runs: i32 = 0;
 function mark(value: i32): void {
@@ -6,6 +8,36 @@ function mark(value: i32): void {
     order = order * 10i32 + value;
     runs = runs + 1i32;
   }
+}
+function noWork(): void {
+}
+function cancelMany(scheduler: &mut Scheduler): bool {
+  const jobs = new Array<u64>({
+    capacity: 100000usize,
+  });
+  let index: usize = 0;
+  while (index<100000usize) {
+    const sequence: u64 = scheduler.schedule(noWork);
+    jobs.push(sequence);
+    index = index + 1usize;
+  }
+  if (scheduler.pendingCount() !== 100000usize) {
+    return false;
+  }
+  index = 0usize;
+  while (index<jobs.length) {
+    const sequence = jobs.at(index);
+    if (sequence === undefined) {
+      return false;
+    }
+    unsafe {
+      if (!scheduler.cancel( * sequence!)) {
+        return false;
+      }
+    }
+    index = index + 1usize;
+  }
+  return scheduler.pendingCount() === 0usize && scheduler.flush(1usize) === 0usize;
 }
 function main(): i32 {
   using scheduler = new Scheduler();
@@ -34,6 +66,9 @@ function main(): i32 {
     if (order !== 123i32 || runs !== 3i32) {
       return 13;
     }
+  }
+  if (!cancelMany( &mut scheduler)) {
+    return 18;
   }
   unsafe {
     order = 0i32;

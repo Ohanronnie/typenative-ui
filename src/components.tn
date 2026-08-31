@@ -1,8 +1,8 @@
 import { usizeToU64 } from "std/alloc";
 import { Array } from "std/collections";
 import { String } from "std/string";
-import { ButtonProps, CanvasProps, DialogProps, EmptyProps, GridProps, ImageProps, ListProps, MenuProps, ProgressProps, ScrollViewProps, SliderProps, SplitViewProps, StackProps, Style, SwitchProps, TextInputProps, TextProps, ToolbarProps, ViewProps, WindowProps } from "./core/types";
-import { Element, ElementRef, StyleSnapshot, bindElementRef, buttonTypeId, canvasTypeId, createHost, createHostAction, createHostActionWithStyle, createHostWithStyle, createText, createTextInputWithSelection, createFragment, defaultStyleSnapshot, dialogTypeId, gridTypeId, imageTypeId, keyInteger, keyNone, kindButton, kindCanvas, kindDialog, kindGrid, kindImage, kindList, kindMenu, kindProgress, kindScrollView, kindSlider, kindSplitView, kindStack, kindSwitch, kindText, kindToolbar, kindView, kindWindow, listTypeId, menuTypeId, progressTypeId, scrollViewTypeId, sliderTypeId, splitViewTypeId, stackTypeId, switchTypeId, textTypeId, toolbarTypeId, viewTypeId, windowTypeId } from "./tnx-runtime";
+import { ButtonProps, CanvasProps, DialogProps, EmptyProps, GridProps, ImageProps, ListProps, MenuProps, ProgressProps, ScrollViewProps, SliderProps, SplitViewProps, StackProps, Style, styleSnapshot, SwitchProps, TextInputProps, TextProps, ToolbarProps, ViewProps, WindowProps } from "./core/types";
+import { AccessibilityRole, Element, ElementRef, FlexDirection, StyleSnapshot, bindElementRef, buttonTypeId, canvasTypeId, createHost, createHostAction, createHostActionWithStyle, createHostWithStyle, createText, createTextInputWithSelection, createFragment, defaultStyleSnapshot, dialogTypeId, gridTypeId, imageTypeId, keyInteger, keyNone, kindButton, kindCanvas, kindDialog, kindGrid, kindImage, kindList, kindMenu, kindProgress, kindScrollView, kindSlider, kindSplitView, kindStack, kindSwitch, kindText, kindToolbar, kindView, kindWindow, lengthKind, lengthValue, listTypeId, menuTypeId, progressTypeId, scrollViewTypeId, sliderTypeId, splitViewTypeId, stackTypeId, switchTypeId, textTypeId, toolbarTypeId, viewTypeId, windowTypeId } from "./tnx-runtime";
 
 function oneChild(child: Element): Array<Element> {
   const children = new Array<Element>({
@@ -16,18 +16,13 @@ function noChildren(): Array<Element> {
     capacity: 0usize
   });
 }
-function snapshot(style: &Style): StyleSnapshot {
-  return {
-    width: style.width, height: style.height, minWidth: style.minWidth, minHeight: style.minHeight, maxWidth: style.maxWidth, maxHeight: style.maxHeight, margin: style.margin, padding: style.padding, marginTop: style.marginTop, marginRight: style.marginRight, marginBottom: style.marginBottom, marginLeft: style.marginLeft, paddingTop: style.paddingTop, paddingRight: style.paddingRight, paddingBottom: style.paddingBottom, paddingLeft: style.paddingLeft, gap: style.gap, flex: style.flex, flexGrow: style.flexGrow, flexShrink: style.flexShrink, flexBasis: style.flexBasis, flexDirection: style.flexDirection, alignItems: style.alignItems, alignSelf: style.alignSelf, justifyContent: style.justifyContent, positionType: style.positionType, insetTop: style.insetTop, insetRight: style.insetRight, insetBottom: style.insetBottom, insetLeft: style.insetLeft, display: style.display, overflow: style.overflow, aspectRatio: style.aspectRatio, hasMarginEdges: style.hasMarginEdges, hasPaddingEdges: style.hasPaddingEdges, revision: style.revision,
-  };
-}
 function withReference(element: Element, reference: &ElementRef | undefined): Element {
   if (reference !== undefined) {
     return bindElementRef(move element, reference!);
   }
   return move element;
 }
-function applyMetadata(element: &mut Element, label: string | undefined, role: i32 | undefined, enabled: bool | undefined): void {
+function applyMetadata(element: &mut Element, label: string | undefined, role: AccessibilityRole | undefined, enabled: bool | undefined): void {
   if (label !== undefined) {
     element.setAccessibilityLabel(label!.clone());
   }
@@ -38,12 +33,12 @@ function applyMetadata(element: &mut Element, label: string | undefined, role: i
     element.setAccessibilityEnabled(enabled!);
   }
 }
-function finishElement(element: Element, reference: &ElementRef | undefined, label: string | undefined, role: i32 | undefined, enabled: bool | undefined): Element {
+function finishElement(element: Element, reference: &ElementRef | undefined, label: string | undefined, role: AccessibilityRole | undefined, enabled: bool | undefined): Element {
   let result = move element;
   applyMetadata( &mut result, label, role, enabled);
   return withReference(move result, reference);
 }
-function withStyleAndMetadata(kind: i32, typeId: u64, children: Array<Element>, style: StyleSnapshot, hasStyle: bool, reference: &ElementRef | undefined, label: string | undefined, role: i32 | undefined, enabled: bool | undefined): Element {
+function withStyleAndMetadata(kind: i32, typeId: u64, children: Array<Element>, style: StyleSnapshot, hasStyle: bool, reference: &ElementRef | undefined, label: string | undefined, role: AccessibilityRole | undefined, enabled: bool | undefined): Element {
   let element = createHost(kind, typeId, keyNone(), String(""), move children);
   if (hasStyle) {
     element.setStyle(move style);
@@ -56,14 +51,14 @@ export function View(props: ViewProps): Element {
   const label = props.accessibilityLabel;
   const role = props.accessibilityRole;
   const enabled = props.accessibilityEnabled;
-  let styleSnapshot = defaultStyleSnapshot();
+  let snapshotValue = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    styleSnapshot = snapshot( &props.style!);
+    snapshotValue = styleSnapshot( &props.style!);
     hasStyle = true;
   }
   const children = move props.children;
-  return withStyleAndMetadata(kindView(), viewTypeId(), oneChild(move children), move styleSnapshot, hasStyle, reference, label, role, enabled);
+  return withStyleAndMetadata(kindView(), viewTypeId(), oneChild(move children), move snapshotValue, hasStyle, reference, label, role, enabled);
 }
 export function Text(props: TextProps): Element {
   const reference = props.elementRef;
@@ -99,25 +94,63 @@ export function TextInput(props: TextInputProps): Element {
   const role = props.accessibilityRole;
   const accessibilityEnabled = props.accessibilityEnabled;
   const enabled = props.enabled;
-  const selectionStart = props.selectionStart;
-  const selectionEnd = props.selectionEnd;
-  const onChange = props.onChange;
+  const selection = props.selection;
+  const onChangeText = props.onChangeText;
+  const onSubmitEditing = props.onSubmitEditing;
+  const onFocus = props.onFocus;
+  const onBlur = props.onBlur;
+  const editable = props.editable;
+  const autoFocus = props.autoFocus;
+  const multiline = props.multiline;
+  const keyboardType = props.keyboardType;
+  const valueProp = props.value;
+  const defaultValueProp = props.defaultValue;
+  const placeholderProp = props.placeholder;
+  const hasValue = valueProp !== undefined;
+  const hasDefaultValue = defaultValueProp !== undefined;
   let value = String("");
-  if (props.value !== undefined) {
-    value = props.value!.clone();
-  } else if (props.defaultValue !== undefined) {
-    value = props.defaultValue!.clone();
+  if (hasValue) {
+    value = move valueProp!;
+  } else if (hasDefaultValue) {
+    value = move defaultValueProp!;
   }
   let placeholder = String("");
-  if (props.placeholder !== undefined) {
-    placeholder = props.placeholder!.clone();
+  if (placeholderProp !== undefined) {
+    placeholder = move placeholderProp!;
   }
   let change: (string) => void = move(_: string): void => {
   };
-  if (onChange !== undefined) {
-    change = onChange!;
+  if (onChangeText !== undefined) {
+    change = onChangeText!;
   }
-  let element = createTextInputWithSelection(move value, move placeholder, move change, selectionStart, selectionEnd);
+  let element = createTextInputWithSelection(move value, move placeholder, move change, undefined, undefined);
+  if (hasValue) {
+    element.setControlled(true);
+  }
+  if (selection !== undefined) {
+    element.setSelection(selection!.start, selection!.end);
+  }
+  if (onSubmitEditing !== undefined) {
+    element.setSubmit(onSubmitEditing!);
+  }
+  if (onFocus !== undefined) {
+    element.setFocus(onFocus!);
+  }
+  if (onBlur !== undefined) {
+    element.setBlur(onBlur!);
+  }
+  if (editable !== undefined) {
+    element.setEditable(editable!);
+  }
+  if (autoFocus !== undefined) {
+    element.setAutoFocus(autoFocus!);
+  }
+  if (multiline !== undefined) {
+    element.setMultiline(multiline!);
+  }
+  if (keyboardType !== undefined) {
+    element.setKeyboardType(keyboardType!);
+  }
   applyMetadata( &mut element, label, role, accessibilityEnabled);
   if (enabled !== undefined) {
     element.setAccessibilityEnabled(enabled!);
@@ -132,6 +165,9 @@ export function Window(props: WindowProps): Element {
   const title = props.title.clone();
   const width = props.width;
   const height = props.height;
+  const onClose = props.onClose;
+  const closePolicy = props.closePolicy;
+  let element = Element.empty();
   if (width !== undefined || height !== undefined) {
     const style = new Style();
     if (width !== undefined) {
@@ -141,10 +177,18 @@ export function Window(props: WindowProps): Element {
       style.height = height!;
     }
     const child = move props.children;
-    return finishElement(createHostWithStyle(kindWindow(), windowTypeId(), keyNone(), move title, oneChild(move child), snapshot( &style)), reference, label, role, enabled);
+    element = createHostWithStyle(kindWindow(), windowTypeId(), keyNone(), move title, oneChild(move child), styleSnapshot( &style));
+  } else {
+    const child = move props.children;
+    element = createHost(kindWindow(), windowTypeId(), keyNone(), move title, oneChild(move child));
   }
-  const child = move props.children;
-  return finishElement(createHost(kindWindow(), windowTypeId(), keyNone(), move title, oneChild(move child)), reference, label, role, enabled);
+  if (onClose !== undefined) {
+    element.setCloseAction(onClose!);
+  }
+  if (closePolicy !== undefined) {
+    element.setClosePolicy(closePolicy!);
+  }
+  return finishElement(move element, reference, label, role, enabled);
 }
 export function Image(props: ImageProps): Element {
   const reference = props.elementRef;
@@ -159,7 +203,7 @@ export function Image(props: ImageProps): Element {
   let element = createHost(kindImage(), imageTypeId(), keyNone(), move label, noChildren());
   element.setImageSource(move source);
   if (props.style !== undefined) {
-    element.setStyle(snapshot( &props.style!));
+    element.setStyle(styleSnapshot( &props.style!));
   }
   applyMetadata( &mut element, metadataLabel, role, enabled);
   return withReference(move element, reference);
@@ -172,7 +216,7 @@ export function ScrollView(props: ScrollViewProps): Element {
   let style = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    style = snapshot( &props.style!);
+    style = styleSnapshot( &props.style!);
     hasStyle = true;
   }
   const children = move props.children;
@@ -186,12 +230,12 @@ export function List(props: ListProps): Element {
   let style = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    style = snapshot( &props.style!);
+    style = styleSnapshot( &props.style!);
     hasStyle = true;
   }
-  let itemHeight = props.itemHeight;
-  if (itemHeight <= 0.0f32) {
-    itemHeight = 32.0f32;
+  let itemHeight = 0.0f32;
+  if (props.itemHeight !== undefined && lengthKind( &props.itemHeight!) === 1i32) {
+    itemHeight = lengthValue( &props.itemHeight!);
   }
   let firstIndex = 0usize;
   if (props.firstVisibleIndex !== undefined) {
@@ -200,7 +244,7 @@ export function List(props: ListProps): Element {
   if (firstIndex > props.itemCount) {
     firstIndex = props.itemCount;
   }
-  let visibleCount = 16usize;
+  let visibleCount = props.itemCount;
   if (props.visibleItemCount !== undefined && props.visibleItemCount! > 0usize) {
     visibleCount = props.visibleItemCount!;
   }
@@ -312,7 +356,7 @@ export function Progress(props: ProgressProps): Element {
   const styleProp = props.style;
   let element = createHost(kindProgress(), progressTypeId(), keyNone(), String(""), noChildren());
   if (styleProp !== undefined) {
-    element.setStyle(snapshot( &styleProp!));
+    element.setStyle(styleSnapshot( &styleProp!));
   }
   element.setNumericValue(value);
   element.setValueRange(minimum, maximum);
@@ -357,7 +401,7 @@ export function Toolbar(props: ToolbarProps): Element {
   let style = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    style = snapshot( &props.style!);
+    style = styleSnapshot( &props.style!);
     hasStyle = true;
   }
   const child = move props.children;
@@ -371,7 +415,7 @@ export function SplitView(props: SplitViewProps): Element {
   let style = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    style = snapshot( &props.style!);
+    style = styleSnapshot( &props.style!);
     hasStyle = true;
   }
   const child = move props.children;
@@ -385,7 +429,7 @@ export function Stack(props: StackProps): Element {
   let style = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    style = snapshot( &props.style!);
+    style = styleSnapshot( &props.style!);
     hasStyle = true;
   }
   const child = move props.children;
@@ -399,7 +443,7 @@ export function Grid(props: GridProps): Element {
   let style = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    style = snapshot( &props.style!);
+    style = styleSnapshot( &props.style!);
     hasStyle = true;
   }
   const child = move props.children;
@@ -413,7 +457,7 @@ export function Canvas(props: CanvasProps): Element {
   let style = defaultStyleSnapshot();
   let hasStyle = false;
   if (props.style !== undefined) {
-    style = snapshot( &props.style!);
+    style = styleSnapshot( &props.style!);
     hasStyle = true;
   }
   const childProp = props.children;
@@ -430,29 +474,29 @@ export function createTextNode(value: &str): Element {
   return createText(value);
 }
 export function styledView(style: &Style, child: Element): Element {
-  return createHostWithStyle(kindView(), viewTypeId(), keyNone(), String(""), oneChild(move child), snapshot(style));
+  return createHostWithStyle(kindView(), viewTypeId(), keyNone(), String(""), oneChild(move child), styleSnapshot(style));
 }
 export function stack(style: &Style, children: Array<Element >): Element {
-  return createHostWithStyle(kindView(), viewTypeId(), keyNone(), String(""), move children, snapshot(style));
+  return createHostWithStyle(kindView(), viewTypeId(), keyNone(), String(""), move children, styleSnapshot(style));
 }
 export function createFragmentChildren(children: Array<Element >): Element {
   return createFragment(move children);
 }
 export function row(children: Array<Element >): Element {
   const style = new Style();
-  style.flexDirection = 0i32;
+  style.flexDirection = FlexDirection.Row;
   return stack( &style, move children);
 }
 export function column(children: Array<Element >): Element {
   const style = new Style();
-  style.flexDirection = 1i32;
+  style.flexDirection = FlexDirection.Column;
   return stack( &style, move children);
 }
 export function button(label: &str, action: () => void): Element {
   return createHostAction(kindButton(), buttonTypeId(), keyNone(), String(label), noChildren(), move action);
 }
 export function styledButton(style: &Style, label: &str, action: () => void): Element {
-  return createHostActionWithStyle(kindButton(), buttonTypeId(), keyNone(), String(label), noChildren(), move action, snapshot(style));
+  return createHostActionWithStyle(kindButton(), buttonTypeId(), keyNone(), String(label), noChildren(), move action, styleSnapshot(style));
 }
 export function window(title: &str, child: Element): Element {
   return createHost(kindWindow(), windowTypeId(), keyNone(), String(title), oneChild(move child));
