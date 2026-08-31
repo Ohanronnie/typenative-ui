@@ -532,6 +532,7 @@ export class HookRoot implements Disposable {
       const component = this.components.atMut(index);
       if (component !== undefined && !component!.isActive()) {
         const instanceId = this.nextId();
+        this.detachComponentFromParents(index);
         component!.activate(move identity, move key, parentIndex, parentInstanceId, position, instanceId, this.generation);
         component!.begin();
         this.attachChild(parentIndex, index);
@@ -645,21 +646,37 @@ export class HookRoot implements Disposable {
     }
   }
   private disposeComponent(index: usize): void {
+    while (true) {
+      const component = this.components.at(index);
+      if (component === undefined || !component!.isActive() || component!.childCount() === 0usize) {
+        break;
+      }
+      const child = component!.childAt(0usize);
+      if (child === undefined) {
+        break;
+      }
+      this.disposeComponent(child!);
+    }
     const component = this.components.at(index);
     if (component === undefined || !component!.isActive()) {
       return;
     }
-    let childIndex: usize = 0;
-    while (childIndex<component!.childCount()) {
-      const child = component!.childAt(childIndex);
-      if (child !== undefined) {
-        this.disposeComponent(child!);
-      }
-      childIndex = childIndex + 1usize;
-    }
+    this.detachComponentFromParents(index);
     const mutable = this.components.atMut(index);
     if (mutable !== undefined) {
       mutable!.dispose();
+    }
+  }
+  private detachComponentFromParents(childIndex: usize): void {
+    let parentIndex: usize = 0;
+    while (parentIndex<this.components.length) {
+      if (parentIndex !== childIndex) {
+        const parent = this.components.atMut(parentIndex);
+        if (parent !== undefined) {
+          parent!.removeChild(childIndex);
+        }
+      }
+      parentIndex = parentIndex + 1usize;
     }
   }
   private attachChild(parentIndex: usize | undefined, childIndex: usize): void {
