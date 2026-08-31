@@ -1,3 +1,4 @@
+import { u64ToUsize, usizeToU64 } from "std/alloc";
 import { Array } from "std/collections";
 import { Disposable } from "std/core";
 import { beginBatchFor, beginComponent, beginHookPassFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor } from "../hooks/hooks";
@@ -216,7 +217,108 @@ function deactivateSubtree(nodes: &mut Array<MountedNode>, id: i32): void {
     node!.children.clear();
   }
 }
-function findOldChild(previous: &Element, next: &Element, used: &Array<u8>, nextIndex: usize, oldCount: usize): usize | undefined {
+class KeyIndexTable implements Disposable {
+  private slots: Array<usize>;
+  private keys: Array<Key>;
+  private values: Array<u64>;
+  private capacity: usize;
+  public constructor(oldCount: usize) {
+    let capacity = oldCount * 2usize + 1usize;
+    if (capacity === 0usize) {
+      capacity = 1usize;
+    }
+    this.capacity = capacity;
+    this.slots = new Array<usize>({
+      capacity: capacity,
+    });
+    this.keys = new Array<Key>({
+      capacity: oldCount,
+    });
+    this.values = new Array<u64>({
+      capacity: oldCount,
+    });
+    let index: usize = 0;
+    while (index<capacity) {
+      this.slots.push(0usize);
+      index = index + 1usize;
+    }
+  }
+  public insertFirst(key: &Key, value: usize): void {
+    let slot = u64ToUsize(key.identity) % this.capacity;
+    while (true) {
+      const marker = this.slots.at(slot);
+      if (marker === undefined) {
+        return;
+      }
+      unsafe {
+        if ( *(marker!) === 0usize) {
+          const entry = this.keys.length + 1usize;
+          this.keys.push({
+            kind: key.kind, text: key.text.clone(), integer: key.integer, identity: key.identity,
+          });
+          this.values.push(usizeToU64(value));
+          this.slots.set(slot, entry);
+          return;
+        }
+        const entryIndex = *(marker!) - 1usize;
+        const existing = this.keys.at(entryIndex);
+        if (existing !== undefined && existing!.equals(key)) {
+          return;
+        }
+      }
+      slot = slot + 1usize;
+      if (slot === this.capacity) {
+        slot = 0usize;
+      }
+    }
+  }
+  public lookup(key: &Key): u64 {
+    let slot = u64ToUsize(key.identity) % this.capacity;
+    let probes: usize = 0;
+    while (probes<this.capacity) {
+      const marker = this.slots.at(slot);
+      if (marker === undefined) {
+        return ~0u64;
+      }
+      unsafe {
+        if ( *(marker!) === 0usize) {
+          return ~0u64;
+        }
+        const entryIndex = *(marker!) - 1usize;
+        const existing = this.keys.at(entryIndex);
+        if (existing !== undefined && existing!.equals(key)) {
+          const value = this.values.at(entryIndex);
+          if (value !== undefined) {
+            return *(value!);
+          }
+          return ~0u64;
+        }
+      }
+      slot = slot + 1usize;
+      if (slot === this.capacity) {
+        slot = 0usize;
+      }
+      probes = probes + 1usize;
+    }
+    return ~0u64;
+  }
+  [Symbol.dispose](): void {
+  }
+}
+function keyedChildIndexes(previous: &Element, oldCount: usize): KeyIndexTable {
+  const indexes = new KeyIndexTable(oldCount);
+  let index: usize = 0;
+  while (index<oldCount) {
+    const child = previous.childAt(index);
+    if (child !== undefined && child!.keyIsPresent()) {
+      const key = child!.key();
+      indexes.insertFirst( &key, index);
+    }
+    index = index + 1usize;
+  }
+  return move indexes;
+}
+function findOldChildLinear(previous: &Element, next: &Element, used: &Array<u8>, nextIndex: usize, oldCount: usize): usize | undefined {
   if (!next.keyIsPresent()) {
     if (nextIndex >= oldCount) {
       return undefined;
@@ -227,6 +329,7 @@ function findOldChild(previous: &Element, next: &Element, used: &Array<u8>, next
     }
     return undefined;
   }
+  const key = next.key();
   let index: usize = 0;
   while (index<oldCount) {
     const candidate = previous.childAt(index);
@@ -234,6 +337,29 @@ function findOldChild(previous: &Element, next: &Element, used: &Array<u8>, next
       return index;
     }
     index = index + 1usize;
+  }
+  return undefined;
+}
+function findOldChildIndexed(previous: &Element, next: &Element, keyed: &KeyIndexTable, used: &Array<u8>, nextIndex: usize, oldCount: usize): usize | undefined {
+  if (!next.keyIsPresent()) {
+    if (nextIndex >= oldCount) {
+      return undefined;
+    }
+    const candidate = previous.childAt(nextIndex);
+    if (candidate !== undefined && !usedAt(used, nextIndex) && !candidate!.keyIsPresent()) {
+      return nextIndex;
+    }
+    return undefined;
+  }
+  const key = next.key();
+  const indexed = keyed.lookup( &key);
+  if (indexed !== ~0u64) {
+    unsafe {
+      const index = u64ToUsize(indexed);
+      if (!usedAt(used, index)) {
+        return index;
+      }
+    }
   }
   return undefined;
 }
@@ -372,6 +498,29 @@ export class Reconciler implements Disposable {
     }
     return replacementId;
   }
+  private reconcileChild(previous: &Element, id: i32, index: usize, nextChild: &Element, oldIndex: usize | undefined, used: &mut Array<u8>, newChildren: &mut Array<i32 >): void {
+    if (oldIndex === undefined) {
+      const childId = this.snapshot(nextChild, parentNode(id), index, false);
+      this.mutations.push({
+        kind: mutationInsert(), nodeId: childId, replacementId: undefined, parentId: parentNode(id), fromIndex: index, toIndex: index,
+      });
+      newChildren.push(childId);
+      return;
+    }
+    const previousIndex = oldIndex!;
+    used.set(previousIndex, 1u8);
+    const childId = nodeChildId( &this.nodes, id, previousIndex);
+    const previousChild = hostChildAt(previous, previousIndex);
+    if (childId !== undefined && previousChild !== undefined) {
+      if (previousIndex !== index && nextChild.keyIsPresent()) {
+        this.mutations.push({
+          kind: mutationMove(), nodeId: childId!, replacementId: undefined, parentId: parentNode(id), fromIndex: previousIndex, toIndex: index,
+        });
+      }
+      const resolvedChildId = this.diffNode(previousChild!, nextChild, childId!, parentNode(id), index);
+      newChildren.push(resolvedChildId);
+    }
+  }
   private diffNode(previous: &Element, next: &Element, id: i32, parent: i32 | undefined, index: usize): i32 {
     if (!previous.referenceEquals(next)) {
       previous.detachReference();
@@ -411,34 +560,27 @@ export class Reconciler implements Disposable {
     const newChildren = new Array<i32>({
       capacity: nextCount
     });
-    let nextIndex: usize = 0;
-    while (nextIndex<nextCount) {
-      const nextChild = hostChildAt(next, nextIndex);
-      if (nextChild !== undefined) {
-        const oldIndex = findOldChild(previous, nextChild!, &used, nextIndex, oldCount);
-        if (oldIndex === undefined) {
-          const childId = this.snapshot(nextChild!, parentNode(id), nextIndex, false);
-          this.mutations.push({
-            kind: mutationInsert(), nodeId: childId, replacementId: undefined, parentId: parentNode(id), fromIndex: nextIndex, toIndex: nextIndex,
-          });
-          newChildren.push(childId);
-        } else {
-          const previousIndex = oldIndex!;
-          used.set(previousIndex, 1u8);
-          const childId = nodeChildId( &this.nodes, id, previousIndex);
-          const previousChild = hostChildAt(previous, previousIndex);
-          if (childId !== undefined && previousChild !== undefined) {
-            if (previousIndex !== nextIndex && nextChild!.keyIsPresent()) {
-              this.mutations.push({
-                kind: mutationMove(), nodeId: childId!, replacementId: undefined, parentId: parentNode(id), fromIndex: previousIndex, toIndex: nextIndex,
-              });
-            }
-            const resolvedChildId = this.diffNode(previousChild!, nextChild!, childId!, parentNode(id), nextIndex);
-            newChildren.push(resolvedChildId);
-          }
+    if (oldCount > 16usize) {
+      const keyed = keyedChildIndexes(previous, oldCount);
+      let nextIndex: usize = 0;
+      while (nextIndex<nextCount) {
+        const nextChild = hostChildAt(next, nextIndex);
+        if (nextChild !== undefined) {
+          const oldIndex = findOldChildIndexed(previous, nextChild!, &keyed, &used, nextIndex, oldCount);
+          this.reconcileChild(previous, id, nextIndex, nextChild!, oldIndex, &mut used, &mut newChildren);
         }
+        nextIndex = nextIndex + 1usize;
       }
-      nextIndex = nextIndex + 1usize;
+    } else {
+      let nextIndex: usize = 0;
+      while (nextIndex<nextCount) {
+        const nextChild = hostChildAt(next, nextIndex);
+        if (nextChild !== undefined) {
+          const oldIndex = findOldChildLinear(previous, nextChild!, &used, nextIndex, oldCount);
+          this.reconcileChild(previous, id, nextIndex, nextChild!, oldIndex, &mut used, &mut newChildren);
+        }
+        nextIndex = nextIndex + 1usize;
+      }
     }
     let previousIndex: usize = 0;
     while (previousIndex<oldCount) {

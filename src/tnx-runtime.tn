@@ -351,6 +351,16 @@ export class ElementNode implements Disposable {
       }
     }
     this.children.clear();
+    this.render = undefined;
+    this.action = undefined;
+    this.textChange = undefined;
+    this.submit = undefined;
+    this.focus = undefined;
+    this.blur = undefined;
+    this.booleanChange = undefined;
+    this.numericChange = undefined;
+    this.closeAction = undefined;
+    this.visibleRangeChange = undefined;
     this.focused = false;
     this.mountedId = undefined;
     this.generation = 0u64;
