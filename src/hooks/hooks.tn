@@ -1,12 +1,13 @@
-import { borrowCallable, dropValue, nullPointer, rawAlloc, rawFree, sizeOf, storeRaw } from "std/alloc";
+import { Rc, borrowCallable, dropValue, nullPointer, rawAlloc, rawFree, rcNew, sizeOf, storeRaw, unionTag, unionTake } from "std/alloc";
 import { Array } from "std/collections";
 import { atomicCompareExchangeI32, atomicLoadI32, atomicStoreI32, Disposable, Equal, MemoryOrder } from "std/core";
 import { yieldNow } from "std/thread";
 import { ComponentId, Key } from "../tnx-runtime";
 
-export type StateSetter<T > =(T) => void;
+export type StateUpdate<T > = T |((T) => T);
+export type StateSetter<T > =(StateUpdate<T >) => void;
 export type Cleanup =() => void;
-export type EffectCallback =() => Cleanup;
+export type EffectCallback =(() => void) |(() => Cleanup);
 export struct HookOrderDiagnostic {
   public componentType: u64;
   public instanceId: u64;
@@ -90,11 +91,12 @@ struct HookCell {
   private dropper?: () => void;
   private dependencies: Array<HookDependency>;
   private pending: bool;
-  private effect: () =>() => void;
+  private effect: (() => void) |(() =>() => void);
   private hasEffect: bool;
   private cleanup: () => void;
   private hasCleanup: bool;
   private deferredValue: *mut u8;
+  private deferredMoved: *mut u8;
   private deferredDropper?: () => void;
   private seenGeneration: u64;
   public matches(kind: i32): bool {
@@ -115,6 +117,16 @@ struct HookCell {
   public valuePointer(): *mut u8 {
     unsafe {
       return this.value;
+    }
+  }
+  public currentValueEquals<T extends Equal<T> >(value: &T): bool {
+    unsafe {
+      if (!this.initialized || this.value === nullPointer<u8>()) {
+        return false;
+      }
+      const previousValue = & *(this.value as *const T);
+      const protocol =( * previousValue)as Equal<T>;
+      return protocol.equals(value);
     }
   }
   public setValuePointer(pointer: *mut u8): void {
@@ -151,7 +163,9 @@ struct HookCell {
   }
   public clearDeferredValue(): void {
     const dropper = this.deferredDropper;
+    const moved = this.deferredMoved;
     this.deferredDropper = undefined;
+    this.deferredMoved = nullRaw();
     if (dropper !== undefined) {
       dropper!();
     }
@@ -160,16 +174,48 @@ struct HookCell {
         rawFree(this.deferredValue);
         this.deferredValue = nullPointer<u8>();
       }
+      if (moved !== nullPointer<u8>()) {
+        rawFree(moved);
+      }
+    }
+  }
+  public takeDeferredValue<T>(): T {
+    unsafe {
+      const pointer = this.deferredValue;
+      const moved = this.deferredMoved;
+      const dropper = this.deferredDropper;
+      this.deferredValue = nullPointer<u8>();
+      this.deferredMoved = nullPointer<u8>();
+      this.deferredDropper = undefined;
+      if (moved !== nullPointer<u8>()) {
+        storeRaw<bool>(moved as *mut bool, true);
+      }
+      const value = *(pointer as *const T);
+      rawFree(pointer);
+      if (dropper !== undefined) {
+        dropper!();
+      }
+      if (moved !== nullPointer<u8>()) {
+        rawFree(moved);
+      }
+      return value;
     }
   }
   public storeDeferredValue<T>(value: T): void {
     this.clearDeferredValue();
     unsafe {
       const pointer = rawAlloc(sizeOf<T>());
+      const moved = rawAlloc(sizeOf<bool>());
       this.deferredValue = pointer;
+      this.deferredMoved = moved;
       storeRaw<T>(pointer as *mut T, move value);
+      storeRaw<bool>(moved as *mut bool, false);
       this.deferredDropper = move(): void => {
-        dropValue<T>(pointer as *mut T);
+        if (! *(moved as *const bool)) {
+          unsafe {
+            dropValue<T>(pointer as *mut T);
+          }
+        }
       };
     }
   }
@@ -230,7 +276,7 @@ struct HookCell {
     this.pending = false;
     return pending;
   }
-  public installEffect(effect: () =>() => void): void {
+  public installEffect(effect: (() => void) |(() =>() => void)): void {
     this.effect = move effect;
     this.hasEffect = true;
   }
@@ -245,9 +291,18 @@ struct HookCell {
       this.hasCleanup = false;
       return;
     }
-    const callback = this.effect;
-    this.cleanup = callback();
-    this.hasCleanup = true;
+    unsafe {
+      const tag = unionTag<(() => void) |(() =>() => void)>( &this.effect);
+      if (tag === 0usize) {
+        const callback = unionTake<(() => void) |(() =>() => void),() => void>(move this.effect);
+        callback();
+        this.hasCleanup = false;
+      } else {
+        const callback = unionTake<(() => void) |(() =>() => void),() =>() => void>(move this.effect);
+        this.cleanup = callback();
+        this.hasCleanup = true;
+      }
+    }
   }
   public runCleanup(): void {
     if (this.hasCleanup) {
@@ -291,7 +346,7 @@ function newHookCell(kind: i32, generation: u64): HookCell {
   return {
     kind: kind, initialized: false, value: value, dropper: undefined, dependencies: new Array<HookDependency>({
       capacity: 0usize
-    }), pending: false, effect: noopEffect, hasEffect: false, cleanup: noop, hasCleanup: false, deferredValue: nullRaw(), deferredDropper: undefined, seenGeneration: generation,
+    }), pending: false, effect: noopEffect, hasEffect: false, cleanup: noop, hasCleanup: false, deferredValue: nullRaw(), deferredMoved: nullRaw(), deferredDropper: undefined, seenGeneration: generation,
   };
 }
 struct ComponentInstance {
@@ -476,12 +531,38 @@ function newComponentInstance(identity: ComponentId, key: Key, parentIndex: usiz
     }),
   };
 }
+struct RootLifetime {
+  private state: i32;
+  public isAlive(): bool {
+    unsafe {
+      return atomicLoadI32(( &this.state)as *const i32, MemoryOrder.Acquire) !== 0i32;
+    }
+  }
+  public invalidate(): void {
+    unsafe {
+      atomicStoreI32(( &mut this.state)as *mut i32, 0i32, MemoryOrder.Release);
+    }
+  }
+  public revive(): void {
+    unsafe {
+      atomicStoreI32(( &mut this.state)as *mut i32, 1i32, MemoryOrder.Release);
+    }
+  }
+}
+function newRootLifetime(): RootLifetime {
+  return {
+    state: 1i32
+  };
+}
 export class HookRoot implements Disposable {
   private components: Array<ComponentInstance>;
   private activeComponents: Array<usize>;
   private generation: u64;
+  private leaseEpoch: u64;
   private updatePending: bool;
   private updateCallback?: () => void;
+  private deferredUpdatePending: bool;
+  private deferredUpdateCallback?: () => void;
   private batchDepth: i32;
   private idCounter: u64;
   private rendering: bool;
@@ -491,6 +572,7 @@ export class HookRoot implements Disposable {
   public transitionDepth: i32;
   private invalidCell: HookCell;
   private previousContexts: Array< *mut u8>;
+  private lease: Rc<RootLifetime>;
   public constructor() {
     this.components = new Array<ComponentInstance>({
       capacity: 0usize
@@ -499,8 +581,11 @@ export class HookRoot implements Disposable {
       capacity: 0usize
     });
     this.generation = 0u64;
+    this.leaseEpoch = 0u64;
     this.updatePending = false;
     this.updateCallback = undefined;
+    this.deferredUpdatePending = false;
+    this.deferredUpdateCallback = undefined;
     this.batchDepth = 0i32;
     this.idCounter = 0u64;
     this.rendering = false;
@@ -514,8 +599,10 @@ export class HookRoot implements Disposable {
     this.previousContexts = new Array< *mut u8>({
       capacity: 0usize
     });
+    this.lease = rcNew<RootLifetime>(newRootLifetime());
   }
   public startPass(): void {
+    this.lease.get().revive();
     this.generation = this.generation + 1u64;
     this.activeComponents.clear();
     this.hookOrderErrors = 0usize;
@@ -619,6 +706,10 @@ export class HookRoot implements Disposable {
       this.updatePending = false;
       this.updateCallback!();
     }
+    if (this.deferredUpdatePending && this.batchDepth === 0i32 && this.deferredUpdateCallback !== undefined) {
+      this.deferredUpdatePending = false;
+      this.deferredUpdateCallback!();
+    }
   }
   public currentComponentIndex(): usize {
     const active = this.activeComponents.at(this.activeComponents.length - 1usize);
@@ -636,7 +727,19 @@ export class HookRoot implements Disposable {
     return this.rendering;
   }
   public isAlive(): bool {
-    return this.alive;
+    return this.alive && this.lease.get().isAlive();
+  }
+  public isLeaseAlive(generation: u64): bool {
+    return this.alive && this.leaseEpoch === generation && this.lease.get().isAlive();
+  }
+  public leaseGeneration(): u64 {
+    return this.leaseEpoch;
+  }
+  public rootLease(): Rc<RootLifetime> {
+    return this.lease.clone();
+  }
+  public strongLease(): Rc<RootLifetime> {
+    return this.lease.clone();
   }
   public nextCell(kind: i32): usize {
     if (!this.hasComponent()) {
@@ -748,6 +851,12 @@ export class HookRoot implements Disposable {
   public clearUpdateCallback(): void {
     this.updateCallback = undefined;
   }
+  public setDeferredUpdateCallback(callback: () => void): void {
+    this.deferredUpdateCallback = move callback;
+  }
+  public clearDeferredUpdateCallback(): void {
+    this.deferredUpdateCallback = undefined;
+  }
   public markUpdate(): void {
     this.updatePending = true;
     if (!this.rendering && this.batchDepth === 0i32 && this.updateCallback !== undefined) {
@@ -759,6 +868,13 @@ export class HookRoot implements Disposable {
     const pending = this.updatePending;
     this.updatePending = false;
     return pending;
+  }
+  public markDeferredUpdate(): void {
+    this.deferredUpdatePending = true;
+    if (!this.rendering && this.batchDepth === 0i32 && this.deferredUpdateCallback !== undefined) {
+      this.deferredUpdatePending = false;
+      this.deferredUpdateCallback!();
+    }
   }
   public beginBatch(): void {
     this.batchDepth = this.batchDepth + 1i32;
@@ -800,6 +916,8 @@ export class HookRoot implements Disposable {
     if (!this.alive) {
       return;
     }
+    this.lease.get().invalidate();
+    this.leaseEpoch = this.leaseEpoch + 1u64;
     let index: usize = 0;
     while (index<this.components.length) {
       const component = this.components.atMut(index);
@@ -817,6 +935,8 @@ export class HookRoot implements Disposable {
     this.generation = 0u64;
     this.updatePending = false;
     this.updateCallback = undefined;
+    this.deferredUpdatePending = false;
+    this.deferredUpdateCallback = undefined;
     this.batchDepth = 0i32;
     this.idCounter = 0u64;
     this.rendering = false;
@@ -957,28 +1077,40 @@ function readCellCallable<T>(cell: &HookCell): T {
     return borrowCallable<T>(cell.valuePointer()as *const T);
   }
 }
-function replaceOwnedValue<T>(owner: *mut u8, componentIndex: usize, cellIndex: usize, instanceId: u64, value: T): void {
+function replaceOwnedValue<T>(owner: *mut u8, rootLease: &Rc<RootLifetime>, leaseGeneration: u64, componentIndex: usize, cellIndex: usize, instanceId: u64, value: T): void {
+  if (!rootLease.get().isAlive()) {
+    return;
+  }
   unsafe {
+    if (owner === nullPointer<u8>()) {
+      return;
+    }
     const root = &mut *(owner as *mut HookRoot);
-    if (!root.isAlive() || !root.hasLiveCell(componentIndex, cellIndex, instanceId)) {
+    if (!root.isLeaseAlive(leaseGeneration) || !root.hasLiveCell(componentIndex, cellIndex, instanceId)) {
       return;
     }
     const cell = root.cellAt(componentIndex, cellIndex);
     replaceCellValue<T>(cell, move value);
   }
 }
-function markUpdateOwned(owner: *mut u8, componentIndex: usize, instanceId: u64): void {
+function markUpdateOwned(owner: *mut u8, rootLease: &Rc<RootLifetime>, leaseGeneration: u64, componentIndex: usize, instanceId: u64): void {
+  if (!rootLease.get().isAlive()) {
+    return;
+  }
   unsafe {
+    if (owner === nullPointer<u8>()) {
+      return;
+    }
     const root = &mut *(owner as *mut HookRoot);
-    if (!root.isAlive() || !root.isLiveComponent(componentIndex, instanceId)) {
+    if (!root.isLeaseAlive(leaseGeneration) || !root.isLiveComponent(componentIndex, instanceId)) {
       return;
     }
     root.markUpdate();
   }
 }
-function subscribeExternal(subscribe: (() => void) => Cleanup, owner: *mut u8, componentIndex: usize, instanceId: u64): Cleanup {
+function subscribeExternal(subscribe: (() => void) => Cleanup, owner: *mut u8, rootLease: Rc<RootLifetime>, leaseGeneration: u64, componentIndex: usize, instanceId: u64): Cleanup {
   const notify = move(): void => {
-    markUpdateOwned(owner, componentIndex, instanceId);
+    markUpdateOwned(owner, &rootLease, leaseGeneration, componentIndex, instanceId);
   };
   return subscribe(move notify);
 }
@@ -1032,11 +1164,36 @@ export function setUpdateCallbackFor(root: &mut HookRoot, callback: () => void):
 export function clearUpdateCallbackFor(root: &mut HookRoot): void {
   root.clearUpdateCallback();
 }
+export function setDeferredUpdateCallbackFor(root: &mut HookRoot, callback: () => void): void {
+  root.setDeferredUpdateCallback(move callback);
+}
+export function clearDeferredUpdateCallbackFor(root: &mut HookRoot): void {
+  root.clearDeferredUpdateCallback();
+}
 export type StatePair<T > =(T, StateSetter<T >);
-function createStateSetter<T>(owner: *mut u8, componentIndex: usize, cellIndex: usize, instanceId: u64): (T) => void {
-  return move(value: T): void => {
-    replaceOwnedValue<T>(owner, componentIndex, cellIndex, instanceId, move value);
-    markUpdateOwned(owner, componentIndex, instanceId);
+function createStateSetter<T>(owner: *mut u8, rootLease: Rc<RootLifetime>, leaseGeneration: u64, componentIndex: usize, cellIndex: usize, instanceId: u64): ((T |((T) => T)) => void) {
+  return move(update: StateUpdate<T >): void => {
+    if (rootLease.get().isAlive()) {
+      unsafe {
+        if (owner !== nullPointer<u8>()) {
+          const root = &mut *(owner as *mut HookRoot);
+          if (root.isLeaseAlive(leaseGeneration) && root.hasLiveCell(componentIndex, cellIndex, instanceId)) {
+            const cell = root.cellAt(componentIndex, cellIndex);
+            const tag = unionTag<StateUpdate<T> >( &update);
+            if (tag === 0usize) {
+              const updater = unionTake<StateUpdate<T>,(T) => T>(move update);
+              const current = readCellValue<T>(cell);
+              const next = updater(move current);
+              replaceCellValue<T>(cell, move next);
+            } else {
+              const value = unionTake<StateUpdate<T>, T>(move update);
+              replaceCellValue<T>(cell, move value);
+            }
+            root.markUpdate();
+          }
+        }
+      }
+    }
   };
 }
 export function useState<T>(initial: T): StatePair<T> {
@@ -1047,21 +1204,26 @@ export function useState<T>(initial: T): StatePair<T> {
   if (!cell.isInitialized()) {
     replaceCellValue<T>(cell, move initial);
   }
-  const setter = createStateSetter<T>(rootPointer(root), componentIndex, cellIndex, root.componentInstance(componentIndex));
+  const leaseGeneration = root.leaseGeneration();
+  const setter = createStateSetter<T>(rootPointer(root), root.strongLease(), leaseGeneration, componentIndex, cellIndex, root.componentInstance(componentIndex));
   return(readCellValue<T>(cell), move setter);
 }
 export type ReducerDispatch<StateValue, Action > =(Action) => void;
 export type ReducerPair<StateValue, Action > =(StateValue, ReducerDispatch<StateValue, Action >);
-function createReducerDispatch<StateValue, Action>(owner: *mut u8, componentIndex: usize, cellIndex: usize, instanceId: u64, reducer: (StateValue, Action) => StateValue): ReducerDispatch<StateValue, Action> {
+function createReducerDispatch<StateValue, Action>(owner: *mut u8, rootLease: Rc<RootLifetime>, leaseGeneration: u64, componentIndex: usize, cellIndex: usize, instanceId: u64, reducer: (StateValue, Action) => StateValue): ReducerDispatch<StateValue, Action> {
   return move(action: Action): void => {
-    unsafe {
-      const root = &mut *(owner as *mut HookRoot);
-      if (root.isAlive() && root.hasLiveCell(componentIndex, cellIndex, instanceId)) {
-        const cell = root.cellAt(componentIndex, cellIndex);
-        const current = readCellValue<StateValue>(cell);
-        const next = reducer(move current, move action);
-        replaceCellValue<StateValue>(cell, move next);
-        markUpdateOwned(owner, componentIndex, instanceId);
+    if (rootLease.get().isAlive()) {
+      unsafe {
+        if (owner !== nullPointer<u8>()) {
+          const root = &mut *(owner as *mut HookRoot);
+          if (root.isLeaseAlive(leaseGeneration) && root.hasLiveCell(componentIndex, cellIndex, instanceId)) {
+            const cell = root.cellAt(componentIndex, cellIndex);
+            const current = readCellValue<StateValue>(cell);
+            const next = reducer(move current, move action);
+            replaceCellValue<StateValue>(cell, move next);
+            root.markUpdate();
+          }
+        }
       }
     }
   };
@@ -1074,26 +1236,27 @@ export function useReducer<StateValue, Action>(reducer: (StateValue, Action) => 
   if (!cell.isInitialized()) {
     replaceCellValue<StateValue>(cell, move initial);
   }
-  const dispatch = createReducerDispatch<StateValue, Action>(rootPointer(root), componentIndex, cellIndex, root.componentInstance(componentIndex), move reducer);
+  const leaseGeneration = root.leaseGeneration();
+  const dispatch = createReducerDispatch<StateValue, Action>(rootPointer(root), root.strongLease(), leaseGeneration, componentIndex, cellIndex, root.componentInstance(componentIndex), move reducer);
   return(readCellValue<StateValue>(cell), move dispatch);
 }
-function installEffectCell<T extends Equal<T> >(cell: &mut HookCell, effect: () =>() => void, dependencies: Array<T >): void {
+function installEffectCell<T extends Equal<T> >(cell: &mut HookCell, effect: (() => void) |(() =>() => void), dependencies: Array<T >): void {
   cell.installEffect(move effect);
   cell.replaceDependencies(move dependencies);
   cell.setInitialized(true);
   cell.markPending();
 }
-function useEffectCell<T extends Equal<T> >(kind: i32, effect: () =>() => void, dependencies: Array<T >): void {
+function useEffectCell<T extends Equal<T> >(kind: i32, effect: (() => void) |(() =>() => void), dependencies: Array<T >): void {
   const cell = currentCell(kind);
   const changed = !cell.isInitialized() || cell.dependenciesChanged( &dependencies);
   if (changed) {
     installEffectCell(cell, move effect, move dependencies);
   }
 }
-export function useEffect<T extends Equal<T> >(effect: () =>() => void, dependencies: Array<T >): void {
+export function useEffect<T extends Equal<T> >(effect: (() => void) |(() =>() => void), dependencies: Array<T >): void {
   useEffectCell<T>(hookEffect, move effect, move dependencies);
 }
-export function useLayoutEffect<T extends Equal<T> >(effect: () =>() => void, dependencies: Array<T >): void {
+export function useLayoutEffect<T extends Equal<T> >(effect: (() => void) |(() =>() => void), dependencies: Array<T >): void {
   useEffectCell<T>(hookLayoutEffect, move effect, move dependencies);
 }
 export function flushLayoutEffectsFor(root: &mut HookRoot): void {
@@ -1132,19 +1295,54 @@ export struct Ref<T> {
   public current: T;
   private pointer: *mut u8;
   private owner: *mut u8;
+  private lease: Rc<RootLifetime>;
+  private generation: u64;
   private componentIndex: usize;
   private cellIndex: usize;
   private instanceId: u64;
-  public read(): T {
+  public isLive(): bool {
+    if (!this.lease.get().isAlive()) {
+      return false;
+    }
     unsafe {
+      if (this.owner === nullPointer<u8>()) {
+        return false;
+      }
+      const root = &mut *(this.owner as *mut HookRoot);
+      const alive = root.isLeaseAlive(this.generation);
+      const liveCell = root.hasLiveCell(this.componentIndex, this.cellIndex, this.instanceId);
+      return alive && liveCell;
+    }
+  }
+  public read(): T {
+    if (!this.lease.get().isAlive()) {
+      return this.current;
+    }
+    unsafe {
+      if (this.owner === nullPointer<u8>()) {
+        return this.current;
+      }
+      const root = &mut *(this.owner as *mut HookRoot);
+      if (!root.isLeaseAlive(this.generation) || !root.hasLiveCell(this.componentIndex, this.cellIndex, this.instanceId)) {
+        return this.current;
+      }
+      const cell = root.cellAt(this.componentIndex, this.cellIndex);
+      this.pointer = cell.valuePointer();
+      this.current = readCellValue<T>(cell);
       return *(this.pointer as *const T);
     }
   }
   public write(value: T): void {
-    replaceOwnedValue<T>(this.owner, this.componentIndex, this.cellIndex, this.instanceId, move value);
+    if (!this.lease.get().isAlive()) {
+      return;
+    }
+    replaceOwnedValue<T>(this.owner, &this.lease, this.generation, this.componentIndex, this.cellIndex, this.instanceId, move value);
     unsafe {
+      if (this.owner === nullPointer<u8>()) {
+        return;
+      }
       const root = &mut *(this.owner as *mut HookRoot);
-      if (root.hasLiveCell(this.componentIndex, this.cellIndex, this.instanceId)) {
+      if (root.isLeaseAlive(this.generation) && root.hasLiveCell(this.componentIndex, this.cellIndex, this.instanceId)) {
         const cell = root.cellAt(this.componentIndex, this.cellIndex);
         this.pointer = cell.valuePointer();
         this.current = readCellValue<T>(cell);
@@ -1161,7 +1359,7 @@ export function useRef<T>(initial: T): Ref<T> {
     replaceCellValue<T>(cell, move initial);
   }
   return {
-    current: readCellValue<T>(cell), pointer: cell.valuePointer(), owner: rootPointer(root), componentIndex: componentIndex, cellIndex: cellIndex, instanceId: root.componentInstance(componentIndex),
+    current: readCellValue<T>(cell), pointer: cell.valuePointer(), owner: rootPointer(root), lease: root.rootLease(), generation: root.leaseGeneration(), componentIndex: componentIndex, cellIndex: cellIndex, instanceId: root.componentInstance(componentIndex),
   };
 }
 export class Context<T> {
@@ -1195,17 +1393,22 @@ export function useId(): u64 {
 export struct Transition {
   public pending: bool;
   private owner: *mut u8;
+  private lease: Rc<RootLifetime>;
+  private generation: u64;
   public isPending(): bool {
     return this.pending;
   }
   public start(callback: () => void): void {
+    if (!this.lease.get().isAlive()) {
+      return;
+    }
     unsafe {
       if (this.owner === nullPointer<u8>()) {
         callback();
         return;
       }
       const root = &mut *(this.owner as *mut HookRoot);
-      if (!root.isAlive()) {
+      if (!root.isLeaseAlive(this.generation)) {
         return;
       }
       this.pending = true;
@@ -1222,16 +1425,31 @@ export function useTransition(): Transition {
   const root = currentRoot();
   root.nextCell(hookTransition);
   return {
-    pending: root.transitionDepth > 0i32, owner: rootPointer(root),
+    pending: root.transitionDepth > 0i32, owner: rootPointer(root), lease: root.rootLease(), generation: root.leaseGeneration(),
   };
 }
-export function useDeferredValue<T>(value: T): T {
-  // A deferred value is still owned by its hook cell. The renderer schedules
-  // the next render at its own priority; the hook must not freeze the initial
-  // value by pretending every render has an empty dependency list.
-  const cell = currentCell(hookDeferredValue);
+function initializeDeferredValue<T>(cell: &mut HookCell, value: T): T {
   replaceCellValue<T>(cell, move value);
   return readCellValue<T>(cell);
+}
+function updateDeferredValue<T extends Equal<T> >(root: &mut HookRoot, cell: &mut HookCell, value: T): T {
+  if (cell.hasDeferredValue()) {
+    const pending = cell.takeDeferredValue<T>();
+    replaceCellValue<T>(cell, move pending);
+  }
+  if (!cell.currentValueEquals<T>( &value)) {
+    cell.storeDeferredValue<T>(move value);
+    root.markDeferredUpdate();
+  }
+  return readCellValue<T>(cell);
+}
+export function useDeferredValue<T extends Equal<T> >(value: T): T {
+  const root = currentRoot();
+  const cell = currentCell(hookDeferredValue);
+  if (!cell.isInitialized()) {
+    return initializeDeferredValue<T>(cell, move value);
+  }
+  return updateDeferredValue<T>(root, cell, move value);
 }
 export function useSyncExternalStore<T>(subscribe: (() => void) => Cleanup, getSnapshot: () => T): T {
   const root = currentRoot();
@@ -1241,7 +1459,9 @@ export function useSyncExternalStore<T>(subscribe: (() => void) => Cleanup, getS
   if (!cell.isInitialized()) {
     const owner = rootPointer(root);
     const instanceId = root.componentInstance(componentIndex);
-    cell.installEffect(move(): Cleanup => subscribeExternal(subscribe, owner, componentIndex, instanceId));
+    const lease = root.rootLease();
+    const leaseGeneration = root.leaseGeneration();
+    cell.installEffect(move(): Cleanup => subscribeExternal(subscribe, owner, move lease, leaseGeneration, componentIndex, instanceId));
     cell.setInitialized(true);
     cell.markPending();
   }

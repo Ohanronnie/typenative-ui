@@ -39,11 +39,12 @@ function keyedItems(reversed: bool, changed: bool): Element {
   }
   return createFragmentElements(move children);
 }
-function reportAllocations(value: u64): void {
+function reportMetric(label: &str, value: u64): void {
   const buffer = new BytesMut({
-    capacity: 64usize,
+    capacity: 96usize,
   });
-  buffer.appendAscii("allocations=");
+  buffer.appendAscii(label);
+  buffer.appendAscii("=");
   buffer.appendUnsignedDecimal(u64ToUsize(value));
   buffer.appendAscii("\n");
   unsafe {
@@ -61,18 +62,22 @@ function main(): i32 {
     renderer.unmount();
     return 10;
   }
+  reportMetric("nodeCount", usizeToU64(renderer.nodeCount()));
+  reportMetric("mutation.mount", usizeToU64(renderer.mutationCount()));
   const same = keyedItems(false, false);
   renderer.update(move same);
   if (renderer.mutationCount() !== 0usize) {
     renderer.unmount();
     return 11;
   }
+  reportMetric("mutation.unchanged", usizeToU64(renderer.mutationCount()));
   const reversed = keyedItems(true, false);
   renderer.update(move reversed);
   if (renderer.mutationCount() !== itemCount()) {
     renderer.unmount();
     return 12;
   }
+  reportMetric("mutation.reverse", usizeToU64(renderer.mutationCount()));
   const reversedRoot = renderer.rootElement();
   const first = hostChildAt(reversedRoot, 0usize);
   if (first === undefined || first!.keyIdentity() !== usizeToU64(itemCount())) {
@@ -84,16 +89,18 @@ function main(): i32 {
     renderer.unmount();
     return 14;
   }
+  reportMetric("mutation.singleTextUpdate", usizeToU64(renderer.mutationCount()));
   renderer.update(keyedItems(true, true));
   if (renderer.mutationCount() !== 0usize) {
     renderer.unmount();
     return 15;
   }
+  reportMetric("mutation.repeatChanged", usizeToU64(renderer.mutationCount()));
   renderer.unmount();
   let allocations = 0u64;
   unsafe {
     allocations = tn_runtime_allocation_count();
   }
-  reportAllocations(allocations);
+  reportMetric("allocations", allocations);
   return 0;
 }

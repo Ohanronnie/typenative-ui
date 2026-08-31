@@ -1,0 +1,119 @@
+import { AccessibilityNode } from "../src/accessibility/accessibility";
+import { Button, Text, View, Window } from "../src/components";
+import { EmptyProps } from "../src/core/types";
+import { HeadlessRenderer } from "../src/renderer/headless";
+import { AccessibilityRole, Element } from "../src/tnx-runtime";
+
+function noAction(): void {
+}
+function hasLabel(node: &AccessibilityNode, label: &str): bool {
+  if (node.labelMatches(label)) {
+    return true;
+  }
+  let index: usize = 0;
+  while (index<node.childCount()) {
+    const child = node.childAt(index);
+    if (child !== undefined) {
+      if (hasLabel(child!, label)) {
+        return true;
+      }
+    }
+    index = index + 1usize;
+  }
+  return false;
+}
+function hasLabelWithRole(node: &AccessibilityNode, label: &str, role: i32): bool {
+  if (node.labelMatches(label) && node.roleCode() === role) {
+    return true;
+  }
+  let index: usize = 0;
+  while (index<node.childCount()) {
+    const child = node.childAt(index);
+    if (child !== undefined && hasLabelWithRole(child!, label, role)) {
+      return true;
+    }
+    index = index + 1usize;
+  }
+  return false;
+}
+function labelHasState(node: &AccessibilityNode, label: &str, enabled: bool, action: bool): bool {
+  if (node.labelMatches(label)) {
+    return node.isEnabled() === enabled && node.hasAction() === action;
+  }
+  let index: usize = 0;
+  while (index<node.childCount()) {
+    const child = node.childAt(index);
+    if (child !== undefined && labelHasState(child!, label, enabled, action)) {
+      return true;
+    }
+    index = index + 1usize;
+  }
+  return false;
+}
+function labelHasValue(node: &AccessibilityNode, label: &str, value: &str): bool {
+  if (node.labelMatches(label)) {
+    return node.valueMatches(value);
+  }
+  let index: usize = 0;
+  while (index<node.childCount()) {
+    const child = node.childAt(index);
+    if (child !== undefined && labelHasValue(child!, label, value)) {
+      return true;
+    }
+    index = index + 1usize;
+  }
+  return false;
+}
+function labelIsFocused(node: &AccessibilityNode, label: &str): bool {
+  if (node.labelMatches(label)) {
+    return node.isFocused();
+  }
+  let index: usize = 0;
+  while (index<node.childCount()) {
+    const child = node.childAt(index);
+    if (child !== undefined && labelIsFocused(child!, label)) {
+      return true;
+    }
+    index = index + 1usize;
+  }
+  return false;
+}
+function App(_: EmptyProps): Element {
+  return <Window title="Accessibility window">
+    <View accessibilityRole={AccessibilityRole.Group} accessibilityLabel="Content">
+      <Text>Hello</Text>
+      <Button accessibilityLabel="Save" enabled={false} onPress={noAction}>Save</Button>
+    </View>
+  </Window>;
+}
+function main(): i32 {
+  using renderer = new HeadlessRenderer();
+  renderer.mount(<App />);
+  const tree = renderer.accessibilityTree();
+  if (tree === undefined) {
+    return 10;
+  }
+  const root = tree!.rootNode();
+  if (!root.labelMatches("Accessibility window") || root.roleCode() !== 1i32 || root.childCount() !== 1usize) {
+    return 11;
+  }
+  if (!hasLabelWithRole(root, "Content", 2i32)) {
+    return 12;
+  }
+  if (!hasLabelWithRole(root, "Hello", 3i32) || !labelHasValue(root, "Hello", "Hello")) {
+    return 13;
+  }
+  if (!hasLabelWithRole(root, "Save", 4i32) || !labelHasState(root, "Save", false, true)) {
+    return 14;
+  }
+  renderer.focusFirst(3i32);
+  const focused = renderer.accessibilityTree();
+  if (focused === undefined || !labelIsFocused(focused!.rootNode(), "Hello")) {
+    return 15;
+  }
+  renderer.unmount();
+  if (renderer.accessibilityTree() !== undefined) {
+    return 16;
+  }
+  return 0;
+}

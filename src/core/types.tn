@@ -237,6 +237,7 @@ export struct WindowProps {
   public width?: RuntimeLength;
   public height?: RuntimeLength;
   public onClose?: () => void;
+  public onResize?: (f32, f32) => void;
   public closePolicy?: RuntimeWindowClosePolicy;
   public elementRef?: &ElementRef;
   public accessibilityLabel?: string;

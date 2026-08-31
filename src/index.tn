@@ -1,10 +1,10 @@
 import { Array } from "std/collections";
 import { Equal } from "std/core";
-import { AccessibilityNode as RuntimeAccessibilityNode, AccessibilityTree as RuntimeAccessibilityTree, accessibilityNode as runtimeAccessibilityNode } from "./accessibility/accessibility";
+import { AccessibilityNode as RuntimeAccessibilityNode, AccessibilityTree as RuntimeAccessibilityTree, accessibilityNode as runtimeAccessibilityNode, accessibilityTreeFor as runtimeAccessibilityTreeFor } from "./accessibility/accessibility";
 import { Animation as RuntimeAnimation, Animator as RuntimeAnimator, Easing as RuntimeEasing } from "./animation/animation";
 import { Button as NativeButton, Canvas as NativeCanvas, Dialog as NativeDialog, Grid as NativeGrid, Image as NativeImage, List as NativeList, Menu as NativeMenu, Progress as NativeProgress, ScrollView as NativeScrollView, Slider as NativeSlider, SplitView as NativeSplitView, Stack as NativeStack, Switch as NativeSwitch, Text as NativeText, TextInput as NativeTextInput, Toolbar as NativeToolbar, View as NativeView, Window as NativeWindowComponent } from "./components";
 import { AccessibilityRole as CoreAccessibilityRole, Align as CoreAlign, auto as coreAuto, ButtonProps as CoreButtonProps, CanvasProps as CoreCanvasProps, DialogProps as CoreDialogProps, Display as CoreDisplay, FlexDirection as CoreFlexDirection, GridProps as CoreGridProps, ImageProps as CoreImageProps, Justify as CoreJustify, KeyboardType as CoreKeyboardType, Length as CoreLength, ListProps as CoreListProps, MenuProps as CoreMenuProps, Overflow as CoreOverflow, percent as corePercent, points as corePoints, PositionType as CorePositionType, ProgressProps as CoreProgressProps, ScrollViewProps as CoreScrollViewProps, SliderProps as CoreSliderProps, SplitViewProps as CoreSplitViewProps, StackProps as CoreStackProps, Style as CoreStyle, SwitchProps as CoreSwitchProps, TextInputProps as CoreTextInputProps, TextProps as CoreTextProps, TextSelection as CoreTextSelection, ToolbarProps as CoreToolbarProps, ViewProps as CoreViewProps, WindowClosePolicy as CoreWindowClosePolicy, WindowProps as CoreWindowProps } from "./core/types";
-import { batch as hookBatch, Context as HookContext, Cleanup, flushLayoutEffectsFor, flushPassiveEffectsFor, HookOrderDiagnostic as RuntimeHookOrderDiagnostic, HookRoot, setUpdateCallbackFor, useCallback as hookUseCallback, useContext as hookUseContext, useDeferredValue as hookUseDeferredValue, useEffect as hookUseEffect, useId as hookUseId, useLayoutEffect as hookUseLayoutEffect, useMemo as hookUseMemo, useReducer as hookUseReducer, useRef as hookUseRef, useState as hookUseState, useSyncExternalStore as hookUseSyncExternalStore, useTransition as hookUseTransition, StatePair as HookStatePair, ReducerPair as HookReducerPair, Ref as HookRef, Transition as HookTransition } from "./hooks/hooks";
+import { batch as hookBatch, Context as HookContext, Cleanup, EffectCallback as HookEffectCallback, flushLayoutEffectsFor, flushPassiveEffectsFor, HookOrderDiagnostic as RuntimeHookOrderDiagnostic, HookRoot, setDeferredUpdateCallbackFor, setUpdateCallbackFor, useCallback as hookUseCallback, useContext as hookUseContext, useDeferredValue as hookUseDeferredValue, useEffect as hookUseEffect, useId as hookUseId, useLayoutEffect as hookUseLayoutEffect, useMemo as hookUseMemo, useReducer as hookUseReducer, useRef as hookUseRef, useState as hookUseState, useSyncExternalStore as hookUseSyncExternalStore, useTransition as hookUseTransition, StatePair as HookStatePair, ReducerPair as HookReducerPair, Ref as HookRef, StateUpdate as HookStateUpdate, StateSetter as HookStateSetter, Transition as HookTransition } from "./hooks/hooks";
 import { NativeRenderer as RuntimeNativeRenderer, createNativeRenderer as runtimeCreateNativeRenderer, runApp as runtimeRunApp } from "./platform/macos";
 import { DuplicateKeyDiagnostic as RuntimeDuplicateKeyDiagnostic, Reconciler as RuntimeReconciler } from "./reconciler/reconciler";
 import { HeadlessRenderer as RuntimeHeadlessRenderer } from "./renderer/headless";
@@ -15,6 +15,9 @@ export type State<T > = HookStatePair<T>;
 export type ReducerState<StateValue, Action > = HookReducerPair<StateValue, Action>;
 export type Ref<T > = HookRef<T>;
 export type EffectCleanup = Cleanup;
+export type EffectCallback = HookEffectCallback;
+export type StateUpdate<T > = HookStateUpdate<T>;
+export type StateSetter<T > = HookStateSetter<T>;
 export type Element = RuntimeElement;
 export type ElementChild = RuntimeElementChild;
 export type ElementRef = RuntimeElementRef;
@@ -50,6 +53,9 @@ export function percent(value: f32): Length {
 }
 export function accessibilityNode(role: AccessibilityRole, label: &str): AccessibilityNode {
   return runtimeAccessibilityNode(role, label);
+}
+export function accessibilityTreeFor(element: &Element): AccessibilityTree {
+  return runtimeAccessibilityTreeFor(element);
 }
 export type ButtonProps = CoreButtonProps;
 export type TextProps = CoreTextProps;
@@ -140,10 +146,10 @@ export function useState<T>(initial: T): State<T> {
 export function useReducer<StateValue, Action>(reducer: (StateValue, Action) => StateValue, initial: StateValue): ReducerState<StateValue, Action> {
   return hookUseReducer<StateValue, Action>(reducer, move initial);
 }
-export function useEffect<T extends Equal<T> >(effect: () => Cleanup, dependencies: Array<T >): void {
+export function useEffect<T extends Equal<T> >(effect: (() => void) |(() =>() => void), dependencies: Array<T >): void {
   hookUseEffect<T>(move effect, move dependencies);
 }
-export function useLayoutEffect<T extends Equal<T> >(effect: () => Cleanup, dependencies: Array<T >): void {
+export function useLayoutEffect<T extends Equal<T> >(effect: (() => void) |(() =>() => void), dependencies: Array<T >): void {
   hookUseLayoutEffect<T>(move effect, move dependencies);
 }
 export function useMemo<T, Dependency extends Equal<Dependency> >(factory: () => T, dependencies: Array<Dependency >): T {
@@ -167,7 +173,7 @@ export function useId(): u64 {
 export function useTransition(): Transition {
   return hookUseTransition();
 }
-export function useDeferredValue<T>(value: T): T {
+export function useDeferredValue<T extends Equal<T> >(value: T): T {
   return hookUseDeferredValue<T>(move value);
 }
 export function useSyncExternalStore<T>(subscribe: (() => void) => Cleanup, getSnapshot: () => T): T {
@@ -199,6 +205,9 @@ export function clearHookRoot(root: &mut HookRoot): void {
 }
 export function setHookRootUpdateCallback(root: &mut HookRoot, callback: () => void): void {
   setUpdateCallbackFor(root, move callback);
+}
+export function setHookRootDeferredUpdateCallback(root: &mut HookRoot, callback: () => void): void {
+  setDeferredUpdateCallbackFor(root, move callback);
 }
 export function createScheduler(): RuntimeScheduler {
   return new RuntimeScheduler();

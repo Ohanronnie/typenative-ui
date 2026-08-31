@@ -7,6 +7,7 @@ import { Element, kindButton, kindText } from "../src/tnx-runtime";
 
 static mut layoutRuns: i32 = 0;
 static mut passiveRuns: i32 = 0;
+static mut voidRuns: i32 = 0;
 static mut cleanups: i32 = 0;
 static mut latestCount: i32 = 0;
 static mut latestReduced: i32 = 0;
@@ -39,6 +40,11 @@ function passiveEffect(): Cleanup {
   }
   return cleanup;
 }
+function voidEffect(): void {
+  unsafe {
+    voidRuns = voidRuns + 1i32;
+  }
+}
 function add(current: i32, action: i32): i32 {
   return current + action;
 }
@@ -64,6 +70,7 @@ function Counter(props: CounterProps): Element {
   const memoized = useMemo<i32, u64>(move(): i32 => current, stableDependencies());
   useLayoutEffect(layoutEffect, stableDependencies());
   useEffect(passiveEffect, stableDependencies());
+  useEffect(voidEffect, stableDependencies());
   unsafe {
     latestCount = current;
     latestReduced = reduced;
@@ -81,7 +88,7 @@ function Counter(props: CounterProps): Element {
     label = "Count: 1";
   }
   const increment = move(): void => {
-    setState(current + 1i32);
+    setState((value) => value + 1i32);
     dispatch(1i32);
     unsafe {
       latestReduced = reduced;
@@ -96,6 +103,9 @@ function Counter(props: CounterProps): Element {
 function main(): i32 {
   using renderer = new HeadlessRenderer();
   const context = createContext<i32>(7i32);
+  if (context.read() !== 7i32) {
+    return 9;
+  }
   renderer.mount(<Counter context={ &context} />);
   if (!renderer.hasKind(kindButton()) || renderer.textLengthFirst(kindButton()) !== 9usize) {
     renderer.unmount();
@@ -109,10 +119,17 @@ function main(): i32 {
   renderer.setUpdateCallback(notifyUpdate);
   renderer.simulatePressFirst(kindButton());
   renderer.update(<Counter context={ &context} />);
+  unsafe {
+    if (latestDeferred !== 0i32) {
+      renderer.unmount();
+      return 16;
+    }
+  }
+  renderer.update(<Counter context={ &context} />);
   const validText = renderer.textLengthFirst(kindText()) === 8usize;
   let validHooks = false;
   unsafe {
-    validHooks = validText && latestCount === 1i32 && latestReduced === 1i32 && latestMemo === 0i32 && latestRef === 1i32 && latestDeferred === 1i32 && latestTheme === 7i32 && stableId === latestId && layoutRuns === 1i32 && passiveRuns === 1i32 && updateNotifications === 1i32;
+    validHooks = validText && latestCount === 1i32 && latestReduced === 1i32 && latestMemo === 0i32 && latestRef === 1i32 && latestDeferred === 1i32 && latestTheme === 7i32 && stableId === latestId && layoutRuns === 1i32 && passiveRuns === 1i32 && voidRuns === 1i32 && updateNotifications === 1i32;
   }
   if (!validHooks) {
     renderer.unmount();

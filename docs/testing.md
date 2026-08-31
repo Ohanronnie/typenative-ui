@@ -16,6 +16,10 @@ entry path, target, JSX runtime, and external libraries are explicit.
 | `testing/component-identity`     | Callable identity, keyed state retention, replacement, and key reset      |
 | `testing/refs`                   | Host reference attach/current/detach lifecycle                            |
 | `testing/lifecycle`              | Deep disposal, repeated mount/unmount, and effect cleanup                 |
+| `testing/animation`              | Animation interpolation, easing, completion, and callback delivery        |
+| `testing/accessibility`          | Recursive accessibility tree roles, labels, children, and native refresh  |
+| `testing/memory`                 | One million state updates with stable live allocation counts              |
+| `testing/frame-budget`           | 1,000 active animations measured at 60 Hz and 120 Hz                      |
 | `testing/reconciler`             | Keyed reverse moves, unchanged trees, text updates, and replacement       |
 | `testing/layout`                 | Yoga row direction, padding, gap, and computed frames                     |
 | `testing/style`                  | Style fields, edge insets, revisions, and snapshots                       |
@@ -40,7 +44,11 @@ The script performs these stages:
 4. Optimized runs for every fixture and the deterministic macOS native renderer smoke test.
 5. UndefinedBehaviorSanitizer and ThreadSanitizer runs for the scheduler and
    headless paths.
-6. The 10,000-key reconciler benchmark with mutation-count gates, allocation
+6. Cached-check and incremental-debug-build timing gates, with nine shuffled
+   cached samples summarized by median, p95, mean, standard deviation, and 95%
+   confidence interval.
+7. The 60 Hz and 120 Hz animation frame-budget gates.
+8. The 10,000-key reconciler benchmark with mutation-count gates, allocation
    count, wall time, and maximum resident memory.
 
 Hook storage is owned by a renderer's `HookRoot` and is cleared on unmount.
@@ -64,12 +72,19 @@ resident set size in `build/verification/benchmark-results.json`. The checked
 in `benchmarks/results.json` records the latest local run and its compiler
 revision.
 
+The timing report is written to `build/verification/performance-results.json`.
+The cached check must remain below one second, incremental debug builds below
+two seconds, compiler invocations below 180 seconds, and frame p95 below
+16.67 ms at 60 Hz and 8.33 ms at 120 Hz.
+
 ## Compiler boundary
 
-The framework starts from compiler commit
-`a1e7324f6df9316d64dec3826d556864f4d49688` and pins the published compiler
-revision `3ef10d4579e1c0765ad56fe787db37b9bdcb4c1a`. The latter contains the
-small compiler/runtime fixes required by the framework: function-valued field
+The framework pins the published compiler revision used by CI. That compiler
+contains the language and runtime fixes required by the framework: binding
+patterns, `.tnx` project resolution, typed JSX lowering, function-valued field
 lowering, explicit float-width casts, safe global callable loads, and
 non-blocking channel operations. The framework never changes
 `compiler-tn/**` or `scripts/bootstrap-self-host.sh`.
+
+The native backend and its acceptance matrix are macOS-only. Linux and GTK
+support are intentionally outside this repository's platform boundary.

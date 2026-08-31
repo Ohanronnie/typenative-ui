@@ -16,7 +16,7 @@ Layout-specific types and the Yoga adapter are also available directly from
 ## Build the macOS example
 
 The repository targets Apple arm64 and uses the pinned TypeNative compiler
-revision `acccdc2a950d5f05a423308e8641f5f1cda15116`.
+revision `7ebacc8d1ac92e7bc201b6619ef470d3ecf93c02`.
 
 ```sh
 git clone https://github.com/Ohanronnie/typenative-ui.git
@@ -32,6 +32,10 @@ The root project builds the macOS Counter example. It exercises functional
 components, JSX children, state, button input, Yoga, and a real AppKit window.
 The deterministic renderer smoke test covers the same native records without
 entering the AppKit event loop.
+
+The complete example is [`examples/interactive/native.tnx`](examples/interactive/native.tnx),
+and the compiler/runtime boundary is visible in the generated LLVM calls to
+the configured `src/tnx-runtime.tn` module.
 
 ## A small component
 
@@ -79,8 +83,11 @@ TYPE_NATIVE_COMPILER_ROOT=/path/to/typenative \
 It checks formatting and linting, verifies the frozen compiler boundary,
 rebuilds Yoga from [`deps/yoga.lock.json`](deps/yoga.lock.json), runs the
 headless and native fixtures in debug and optimized builds, and records
-AddressSanitizer, UndefinedBehaviorSanitizer, and ThreadSanitizer results.
-The benchmark report is written to `build/verification/benchmark-results.json`.
+AddressSanitizer, UndefinedBehaviorSanitizer, and ThreadSanitizer results. It
+also enforces cached-check, incremental-build, and 60/120 Hz frame-budget
+thresholds. The reports are written to
+`build/verification/benchmark-results.json` and
+`build/verification/performance-results.json`.
 
 See [`docs/architecture.md`](docs/architecture.md),
 [`docs/native.md`](docs/native.md), and [`docs/testing.md`](docs/testing.md)

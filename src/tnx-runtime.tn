@@ -288,6 +288,8 @@ export class ElementNode implements Disposable {
   public keyboardType: KeyboardType;
   public closePolicy: WindowClosePolicy;
   public closeAction?: () => void;
+  public resizeAction?: (f32, f32) => void;
+  public enabled: bool;
   public focused: bool;
   public virtualized: bool;
   public virtualItemCount: usize;
@@ -332,6 +334,8 @@ export class ElementNode implements Disposable {
     this.keyboardType = KeyboardType.Default;
     this.closePolicy = WindowClosePolicy.Allow;
     this.closeAction = undefined;
+    this.resizeAction = undefined;
+    this.enabled = true;
     this.focused = false;
     this.virtualized = false;
     this.virtualItemCount = 0usize;
@@ -367,6 +371,7 @@ export class ElementNode implements Disposable {
     this.booleanChange = undefined;
     this.numericChange = undefined;
     this.closeAction = undefined;
+    this.resizeAction = undefined;
     this.visibleRangeChange = undefined;
     this.focused = false;
     this.mountedId = undefined;
@@ -572,7 +577,7 @@ export struct Element {
     return this.node.action !== undefined;
   }
   public invokeAction(): void {
-    if (this.node.action !== undefined) {
+    if (this.node.enabled && this.node.action !== undefined) {
       this.node.action!();
     }
   }
@@ -620,7 +625,7 @@ export struct Element {
     return this.node.submit !== undefined;
   }
   public invokeSubmit(): bool {
-    if (this.node.submit !== undefined) {
+    if (this.node.enabled && this.node.submit !== undefined) {
       this.node.submit!();
       return true;
     }
@@ -633,6 +638,9 @@ export struct Element {
     return this.node.focus !== undefined || this.node.blur !== undefined;
   }
   public invokeFocusChange(focused: bool): bool {
+    if (!this.node.enabled) {
+      return false;
+    }
     if (focused && this.node.focus !== undefined) {
       this.node.focus!();
       return true;
@@ -653,6 +661,9 @@ export struct Element {
     return this.node.textChange !== undefined;
   }
   public invokeTextChange(value: string): bool {
+    if (!this.node.enabled || !this.node.editable) {
+      return false;
+    }
     if (!this.node.controlled) {
       this.node.value = value.clone();
       this.node.hasValue = true;
@@ -723,11 +734,30 @@ export struct Element {
   public setCloseAction(action: () => void): void {
     this.node.closeAction = move action;
   }
+  public hasResizeAction(): bool {
+    return this.node.resizeAction !== undefined;
+  }
+  public invokeResize(width: f32, height: f32): bool {
+    if (this.node.resizeAction !== undefined) {
+      this.node.resizeAction!(width, height);
+      return true;
+    }
+    return false;
+  }
+  public setResizeAction(action: (f32, f32) => void): void {
+    this.node.resizeAction = move action;
+  }
+  public setEnabled(value: bool): void {
+    this.node.enabled = value;
+  }
+  public isEnabled(): bool {
+    return this.node.enabled;
+  }
   public hasBooleanChange(): bool {
     return this.node.booleanChange !== undefined;
   }
   public invokeBooleanChange(value: bool): bool {
-    if (this.node.booleanChange !== undefined) {
+    if (this.node.enabled && this.node.booleanChange !== undefined) {
       this.node.booleanChange!(value);
       return true;
     }
@@ -740,7 +770,7 @@ export struct Element {
     return this.node.numericChange !== undefined;
   }
   public invokeNumericChange(value: f32): bool {
-    if (this.node.numericChange !== undefined) {
+    if (this.node.enabled && this.node.numericChange !== undefined) {
       this.node.numericChange!(value);
       return true;
     }

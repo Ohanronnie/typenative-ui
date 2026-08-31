@@ -2,6 +2,7 @@ import { Deque, Set } from "std/collections";
 import { Disposable } from "std/core";
 import { Condition, Mutex, condition } from "std/sync";
 import { threadId } from "std/thread";
+import { Instant } from "std/time";
 
 export enum Priority {
   Immediate, UserBlocking, Normal, Low, Idle,
@@ -15,6 +16,10 @@ export struct WorkItem {
   public priority: Priority;
   public sequence: u64;
   public callback: () => void;
+}
+function monotonicNanoseconds(): u64 {
+  const instant = Instant.now();
+  return instant.timestampNanoseconds;
 }
 class WorkQueue {
   private immediate: Deque<WorkItem>;
@@ -224,6 +229,24 @@ export class Scheduler implements Disposable {
     }
     return count;
   }
+  public flushUntil(deadlineNanoseconds: u64): usize {
+    if (!this.ownerOnly()) {
+      return 0;
+    }
+    let count: usize = 0;
+    while ((monotonicNanoseconds() < deadlineNanoseconds) && this.runNext()) {
+      count = count + 1usize;
+    }
+    return count;
+  }
+  public flushFor(budgetNanoseconds: u64): usize {
+    const start: u64 = monotonicNanoseconds();
+    let deadline = start + budgetNanoseconds;
+    if (deadline<start) {
+      deadline = 18446744073709551615u64;
+    }
+    return this.flushUntil(deadline);
+  }
   public isRunning(): bool {
     return this.running;
   }
@@ -332,6 +355,40 @@ export class UiScheduler implements Disposable {
       }
     }
     return count;
+  }
+  public drainUntil(deadlineNanoseconds: u64): usize {
+    if (!this.ownerOnly()) {
+      return 0;
+    }
+    let count: usize = 0;
+    while (monotonicNanoseconds() < deadlineNanoseconds) {
+      let job: WorkItem | undefined = undefined;
+      {
+        using locked = this.queue.lock();
+        job = locked.getMut().take(this.highStreak);
+        if (job === undefined) {
+          break;
+        }
+        if (highPriority(job!.priority)) {
+          this.highStreak = this.highStreak + 1usize;
+        } else {
+          this.highStreak = 0usize;
+        }
+      }
+      if (job !== undefined) {
+        job!.callback();
+        count = count + 1usize;
+      }
+    }
+    return count;
+  }
+  public drainFor(budgetNanoseconds: u64): usize {
+    const start: u64 = monotonicNanoseconds();
+    let deadline = start + budgetNanoseconds;
+    if (deadline<start) {
+      deadline = 18446744073709551615u64;
+    }
+    return this.drainUntil(deadline);
   }
   public pendingCount(): usize {
     using locked = this.queue.lock();

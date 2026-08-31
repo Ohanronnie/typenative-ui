@@ -1,0 +1,36 @@
+import { Animation, Animator, Easing } from "../src/animation/animation";
+static mut updates: i32 = 0;
+static mut lastValue: f64 = 0.0;
+function captureAnimation(value: f64): void {
+  unsafe {
+    updates = updates + 1i32;
+    lastValue = value;
+  }
+}
+function main(): i32 {
+  const animator = new Animator();
+  let animation = new Animation(0.0, 10.0, 1.0, Easing.Linear);
+  animation.setUpdate(captureAnimation);
+  animation.start();
+  animator.add(move animation);
+  if (animator.count() !== 1usize || !animator.hasRunning()) {
+    return 1;
+  }
+  unsafe {
+    if (animator.tick(0.25) !== 1usize || updates !== 1i32 || lastValue !== 2.5) {
+      return 2;
+    }
+  }
+  unsafe {
+    if (animator.tick(0.75) !== 1usize || updates !== 2i32 || lastValue !== 10.0 || animator.count() !== 0usize || animator.hasRunning()) {
+      return 3;
+    }
+  }
+  let instant = new Animation(4.0, 8.0, 0.0, Easing.EaseOut);
+  instant.start();
+  animator.add(move instant);
+  if (animator.tick(0.0) !== 1usize || animator.count() !== 0usize) {
+    return 4;
+  }
+  return 0;
+}

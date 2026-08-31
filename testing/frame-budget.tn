@@ -1,0 +1,118 @@
+import { u64ToUsize } from "std/alloc";
+import { BytesMut } from "std/bytes";
+import { Array } from "std/collections";
+import { c_size } from "std/ffi";
+import { Animation, Animator, Easing } from "../src/animation/animation";
+
+declare extern "C" {
+  function tn_clock_monotonic_nanoseconds(): u64;
+  function tn_console_write(fd: i32, bytes: *const u8, length: c_size): i32;
+}
+static mut animationUpdates: u64 = 0;
+function noUpdate(value: f64): void {
+  unsafe {
+    animationUpdates = animationUpdates + 1u64;
+  }
+}
+function now(): u64 {
+  unsafe {
+    return tn_clock_monotonic_nanoseconds();
+  }
+}
+function populate(animator: &mut Animator, count: usize): void {
+  let index: usize = 0;
+  while (index<count) {
+    let animation = new Animation(0.0, 1.0, 10.0, Easing.EaseInOut);
+    animation.setUpdate(noUpdate);
+    animation.start();
+    animator.add(move animation);
+    index = index + 1usize;
+  }
+}
+function valueAt(samples: &Array<u64>, index: usize): u64 {
+  unsafe {
+    return *(samples.at(index)!);
+  }
+}
+function percentile(samples: &Array<u64>, percentage: usize): u64 {
+  let sorted = new Array<u64>({
+    capacity: samples.length,
+  });
+  let index: usize = 0;
+  while (index<samples.length) {
+    const value = valueAt(samples, index);
+    let position = sorted.length;
+    while (position > 0usize) {
+      const previous = valueAt( &sorted, position - 1usize);
+      if (previous <= value) {
+        break;
+      }
+      if (position === sorted.length) {
+        sorted.push(previous);
+      } else {
+        sorted.set(position, previous);
+      }
+      position = position - 1usize;
+    }
+    if (position === sorted.length) {
+      sorted.push(value);
+    } else {
+      sorted.set(position, value);
+    }
+    index = index + 1usize;
+  }
+  if (sorted.length === 0usize) {
+    return 0;
+  }
+  let rank =(sorted.length * percentage + 99usize) / 100usize;
+  if (rank === 0usize) {
+    rank = 1usize;
+  }
+  return valueAt( &sorted, rank - 1usize);
+}
+function measureFrames(frameCount: usize, delta: f64, animationCount: usize): u64 {
+  const animator = new Animator();
+  populate( &mut animator, animationCount);
+  const samples = new Array<u64>({
+    capacity: frameCount,
+  });
+  let frame: usize = 0;
+  while (frame<frameCount) {
+    const started = now();
+    animator.tick(delta);
+    const finished = now();
+    samples.push(finished - started);
+    frame = frame + 1usize;
+  }
+  const result = percentile( &samples, 95usize);
+  animator.clear();
+  return result;
+}
+function reportMetric(label: &str, value: u64): void {
+  const buffer = new BytesMut({
+    capacity: 96usize,
+  });
+  buffer.appendAscii(label);
+  buffer.appendAscii("=");
+  buffer.appendUnsignedDecimal(u64ToUsize(value));
+  buffer.appendAscii("\n");
+  unsafe {
+    tn_console_write(1i32, buffer.nativePointer()as *const u8, buffer.length);
+  }
+}
+function main(): i32 {
+  const p95At60Hz = measureFrames(120usize, 1.0 / 60.0, 1000usize);
+  const p95At120Hz = measureFrames(240usize, 1.0 / 120.0, 1000usize);
+  unsafe {
+    if (animationUpdates === 0u64) {
+      return 11;
+    }
+    reportMetric("animationUpdates", animationUpdates);
+  }
+  reportMetric("frameBudget60P95Nanoseconds", p95At60Hz);
+  reportMetric("frameBudget120P95Nanoseconds", p95At120Hz);
+  if (p95At60Hz >= 16670000u64 || p95At120Hz >= 8330000u64) {
+    return 10;
+  }
+  return 0;
+}

@@ -6,6 +6,7 @@ import { c_size } from "std/ffi";
 import { String } from "std/string";
 import { threadId } from "std/thread";
 import { Instant } from "std/time";
+import { AccessibilityTree, accessibilityTreeFor } from "../accessibility/accessibility";
 import { Animation, Animator } from "../animation/animation";
 import { applyStyleSnapshot } from "../layout/layout";
 import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "../reconciler/mutations";
@@ -13,6 +14,11 @@ import { Reconciler } from "../reconciler/reconciler";
 import { Priority, UiScheduler } from "../scheduler/scheduler";
 import { accessibilityRoleCode, defaultStyleSnapshot, Element, dispatchPress, hostChildAt, hostChildCount, kindButton, kindCanvas, kindDialog, kindFragment, kindFunction, kindGrid, kindImage, kindList, kindMenu, kindProgress, kindScrollView, kindSlider, kindSplitView, kindStack, kindSwitch, kindText, kindTextInput, kindToolbar, kindView, kindWindow, lengthKind, lengthValue, TextSelection } from "../tnx-runtime";
 
+function immediatePriority(priority: Priority): bool {
+  return switch(priority) {
+    case Priority.Immediate: true, case Priority.UserBlocking: false, case Priority.Normal: false, case Priority.Low: false, case Priority.Idle: false,
+  };
+}
 extern struct NativeRect {
   public x: f64;
   public y: f64;
@@ -55,8 +61,9 @@ declare extern "C" {
   function objc_allocateClassPair(superclass: *mut u8, name: *const u8, extraBytes: c_size): *mut u8;
   function objc_registerClassPair(classPointer: *mut u8): void;
   function class_addMethod(classPointer: *mut u8, selector: *mut u8, implementation: *mut u8, types: *const u8): bool;
-  function class_getInstanceSize(classPointer: *mut u8): c_size;
   function class_createInstance(classPointer: *mut u8, extraBytes: c_size): *mut u8;
+  function objc_setAssociatedObject(object: *mut u8, key: *const u8, value: *mut u8, policy: u64): void;
+  function objc_getAssociatedObject(object: *mut u8, key: *const u8): *mut u8;
   function YGNodeNew(): *mut u8;
   function YGNodeFree(node: *mut u8): void;
   function YGNodeRemoveChild(node: *mut u8, child: *mut u8): void;
@@ -754,6 +761,28 @@ struct NativeActionContext {
   public identity: u64;
   public kind: i32;
 }
+static mut actionContextAssociationKey: i32 = 0;
+function actionContextKey(): *const u8 {
+  unsafe {
+    return( &actionContextAssociationKey)as *const u8;
+  }
+}
+function releaseActionTarget(target: *mut u8): void {
+  if (target === nullRaw()) {
+    return;
+  }
+  unsafe {
+    const box = objc_getAssociatedObject(target, actionContextKey());
+    if (box !== nullRaw()) {
+      const context = send(box, "pointerValue", nullRaw());
+      if (context !== nullRaw()) {
+        rawFree(context);
+      }
+      objc_setAssociatedObject(target, actionContextKey(), nullRaw(), 1u64);
+    }
+    send(target, "release", nullRaw());
+  }
+}
 struct NativeRecord {
   public nodeId: i32;
   public identity: u64;
@@ -1124,9 +1153,6 @@ function firstRootNativeNodeId(records: &Array<NativeRecord >): i32 | undefined 
 function yogaUndefined(): f32 {
   return 0.0 / 0.0f32;
 }
-function allSchedulerWork(): usize {
-  return 18446744073709551615;
-}
 function releaseNativeRecord(entry: &mut NativeRecord): void {
   if (entry.target !== nullRaw()) {
     if (entry.native !== nullRaw()) {
@@ -1145,7 +1171,7 @@ function releaseNativeRecord(entry: &mut NativeRecord): void {
         send(entry.native, "setDelegate:", nullRaw());
       }
     }
-    send(entry.target, "release", nullRaw());
+    releaseActionTarget(entry.target);
     entry.target = nullRaw();
   }
   if (entry.native !== nullRaw()) {
@@ -1187,6 +1213,7 @@ export class NativeRenderer implements Disposable {
   private closedWindows: Set<u64>;
   private records: Array<NativeRecord>;
   private reconciler: Reconciler;
+  private accessibility?: AccessibilityTree;
   private scheduler: UiScheduler;
   private uiThread: u64;
   private started: bool;
@@ -1195,6 +1222,7 @@ export class NativeRenderer implements Disposable {
   private animator: Animator;
   private updating: bool;
   private rerenderQueued: bool;
+  private rerenderPriority: Priority;
   private schedulerJob: u64 | undefined;
   private frameQueued: bool;
   private frameJob: u64 | undefined;
@@ -1212,6 +1240,7 @@ export class NativeRenderer implements Disposable {
       capacity: 0usize
     });
     this.reconciler = new Reconciler();
+    this.accessibility = undefined;
     this.scheduler = new UiScheduler();
     this.animator = new Animator();
     this.uiThread = 0u64;
@@ -1222,12 +1251,21 @@ export class NativeRenderer implements Disposable {
     this.frameJob = undefined;
     this.updating = false;
     this.rerenderQueued = false;
+    this.rerenderPriority = Priority.Immediate;
     this.schedulerJob = undefined;
     this.schedulerTarget = nullRaw();
     this.selfPointer = nullRaw();
     unsafe {
       this.selfPointer = this as *mut NativeRenderer as *mut u8;
     }
+  }
+  private refreshAccessibility(): void {
+    if (!this.reconciler.isMounted()) {
+      this.accessibility = undefined;
+      return;
+    }
+    const tree = accessibilityTreeFor(this.reconciler.rootElement());
+    this.accessibility = move tree;
   }
   private onUIThread(): bool {
     unsafe {
@@ -2043,9 +2081,11 @@ export class NativeRenderer implements Disposable {
   }
   private closeMounted(): void {
     this.reconciler.clearUpdateCallback();
+    this.reconciler.clearDeferredUpdateCallback();
     this.cancelAnimationFrame();
     this.animator.clear();
     this.clearNativeRecords();
+    this.accessibility = undefined;
     this.reconciler.unmount();
     this.closedWindows.clear();
     this.mounted = false;
@@ -2060,6 +2100,7 @@ export class NativeRenderer implements Disposable {
     this.buildSubtree(selfRootPointer( &mut this.reconciler), undefined);
     this.syncWindows();
     this.layout();
+    this.refreshAccessibility();
     let windowIndex: usize = 0;
     while (windowIndex<this.windows.length) {
       const windowId = intAt( &this.windows, windowIndex);
@@ -2085,6 +2126,11 @@ export class NativeRenderer implements Disposable {
     this.reconciler.setUpdateCallback(move(): void => {
       unsafe {
         ( *(rendererPointer as *mut NativeRenderer)).requestRerender();
+      }
+    });
+    this.reconciler.setDeferredUpdateCallback(move(): void => {
+      unsafe {
+        ( *(rendererPointer as *mut NativeRenderer)).requestDeferredRerender();
       }
     });
     return true;
@@ -2160,20 +2206,32 @@ export class NativeRenderer implements Disposable {
   public animationCount(): usize {
     return this.animator.count();
   }
-  private requestRerender(): void {
+  private requestRerenderAt(priority: Priority): void {
+    const immediate = immediatePriority(priority);
     if (!this.mounted || this.factory === undefined) {
       return;
     }
     if (this.updating) {
       this.rerenderQueued = true;
+      if (immediate) {
+        this.rerenderPriority = Priority.Immediate;
+      }
       return;
     }
     if (this.rerenderQueued) {
-      return;
+      if (!immediate || immediatePriority(this.rerenderPriority)) {
+        return;
+      }
+      if (this.schedulerJob !== undefined) {
+        this.scheduler.cancel(this.schedulerJob!);
+        this.schedulerJob = undefined;
+      }
+      this.rerenderQueued = false;
     }
     this.rerenderQueued = true;
+    this.rerenderPriority = priority;
     const rendererPointer = this.selfPointer;
-    const job = this.scheduler.post(Priority.Immediate, move(): void => {
+    const job = this.scheduler.post(priority, move(): void => {
       unsafe {
         ( *(rendererPointer as *mut NativeRenderer)).runScheduledRerender();
       }
@@ -2189,6 +2247,12 @@ export class NativeRenderer implements Disposable {
       sendSelectorObjectBool(this.schedulerTarget, "performSelectorOnMainThread:withObject:waitUntilDone:", "tnuiRerender:", nullRaw(), false);
     }
   }
+  private requestRerender(): void {
+    this.requestRerenderAt(Priority.Immediate);
+  }
+  private requestDeferredRerender(): void {
+    this.requestRerenderAt(Priority.Low);
+  }
   private runScheduledRerender(): void {
     this.schedulerJob = undefined;
     if (!this.mounted || this.factory === undefined) {
@@ -2199,7 +2263,7 @@ export class NativeRenderer implements Disposable {
   }
   private drainScheduler(): void {
     if (this.onUIThread()) {
-      this.scheduler.drain(allSchedulerWork());
+      this.scheduler.drainFor(8000000u64);
     }
   }
   public drainScheduledWork(): void {
@@ -2216,8 +2280,9 @@ export class NativeRenderer implements Disposable {
     this.update(move root);
     this.updating = false;
     if (this.rerenderQueued && this.onUIThread()) {
+      const priority = this.rerenderPriority;
       this.rerenderQueued = false;
-      this.requestRerender();
+      this.requestRerenderAt(priority);
     }
   }
   public update(root: Element): bool {
@@ -2229,6 +2294,7 @@ export class NativeRenderer implements Disposable {
     this.applyMutations();
     this.syncWindows();
     this.layout();
+    this.refreshAccessibility();
     return true;
   }
   public dispatchAction(identity: u64): void {
@@ -2241,6 +2307,7 @@ export class NativeRenderer implements Disposable {
       dispatchPress( & *(element as *mut Element));
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
   }
   public dispatchSubmit(identity: u64): bool {
     const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
@@ -2253,6 +2320,7 @@ export class NativeRenderer implements Disposable {
       invoked =( & *(element as *mut Element)).invokeSubmit();
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
     return invoked;
   }
   public dispatchFocusChange(identity: u64, focused: bool): bool {
@@ -2274,6 +2342,7 @@ export class NativeRenderer implements Disposable {
       }
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
     return invoked;
   }
   public dispatchWindowWillClose(identity: u64): void {
@@ -2295,6 +2364,32 @@ export class NativeRenderer implements Disposable {
       ( & *(element as *mut Element)).invokeClose();
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
+  }
+  public dispatchWindowResize(identity: u64): void {
+    const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
+    if (element === nullElement()) {
+      return;
+    }
+    const nodeId = selfNodeIdForIdentity( &mut this.reconciler, identity);
+    if (nodeId === undefined) {
+      return;
+    }
+    const native = recordNative( &mut this.records, nodeId!);
+    if (native === nullRaw()) {
+      return;
+    }
+    const content = send(native, "contentView", nullRaw());
+    if (content === nullRaw()) {
+      return;
+    }
+    const bounds = sendNativeRect(content, "bounds");
+    this.reconciler.beginBatch();
+    unsafe {
+      ( & *(element as *mut Element)).invokeResize(bounds.width as f32, bounds.height as f32);
+    }
+    this.reconciler.endBatch();
+    this.refreshAccessibility();
   }
   public windowShouldClose(identity: u64): bool {
     const element = findElementPointer(selfRootPointer( &mut this.reconciler), identity);
@@ -2316,6 +2411,7 @@ export class NativeRenderer implements Disposable {
       invoked =( & *(element as *mut Element)).invokeTextChange(move value);
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
     return invoked;
   }
   public dispatchSelectionFromNative(identity: u64): void {
@@ -2409,6 +2505,7 @@ export class NativeRenderer implements Disposable {
       invoked =( & *(element as *mut Element)).invokeBooleanChange(value);
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
     return invoked;
   }
   public dispatchNumericChange(identity: u64, value: f32): bool {
@@ -2422,6 +2519,7 @@ export class NativeRenderer implements Disposable {
       invoked =( & *(element as *mut Element)).invokeNumericChange(value);
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
     return invoked;
   }
   public dispatchVisibleRangeChange(identity: u64, firstIndex: usize): bool {
@@ -2440,6 +2538,7 @@ export class NativeRenderer implements Disposable {
       invoked =( & *(element as *mut Element)).invokeVisibleRangeChange(firstIndex);
     }
     this.reconciler.endBatch();
+    this.refreshAccessibility();
     return invoked;
   }
   public unsafe dispatchScrollChange(identity: u64, scrollView: *mut u8): void {
@@ -2552,6 +2651,12 @@ export class NativeRenderer implements Disposable {
   public rootElement(): &Element {
     return this.reconciler.rootElement();
   }
+  public accessibilityTree(): &AccessibilityTree | undefined {
+    if (this.accessibility === undefined) {
+      return undefined;
+    }
+    return &this.accessibility!;
+  }
   public close(): void {
     using pool = new AutoreleasePool();
     if (this.started && !this.onUIThread()) {
@@ -2562,7 +2667,7 @@ export class NativeRenderer implements Disposable {
     this.rerenderQueued = false;
     this.schedulerJob = undefined;
     if (this.schedulerTarget !== nullRaw()) {
-      send(this.schedulerTarget, "release", nullRaw());
+      releaseActionTarget(this.schedulerTarget);
       this.schedulerTarget = nullRaw();
     }
     this.stop();
@@ -2614,17 +2719,29 @@ function dispatchNativeWindowClose(rendererPointer: *mut u8, identity: u64): voi
     }
   }
 }
+function dispatchNativeWindowResize(rendererPointer: *mut u8, identity: u64): void {
+  if (rendererPointer === nullRaw()) {
+    return;
+  }
+  unsafe {
+    ( *(rendererPointer as *mut NativeRenderer)).dispatchWindowResize(identity);
+  }
+}
 function nativeTargetContext(receiver: *mut u8): NativeActionContext {
   unsafe {
-    const actionClass = classPointer("TNUIActionTarget");
-    if (actionClass === nullRaw()) {
+    const box = objc_getAssociatedObject(receiver, actionContextKey());
+    if (box === nullRaw()) {
       return {
         renderer: nullRaw(), identity: 0u64, kind: 0i32,
       };
     }
-    const offset = class_getInstanceSize(actionClass);
-    const address = byteAddress(receiver as *const u8, offset as usize)as *const NativeActionContext;
-    return * address;
+    const context = send(box, "pointerValue", nullRaw());
+    if (context === nullRaw()) {
+      return {
+        renderer: nullRaw(), identity: 0u64, kind: 0i32,
+      };
+    }
+    return *(context as *const NativeActionContext);
   }
 }
 function dispatchNativeRerender(rendererPointer: *mut u8): void {
@@ -2691,6 +2808,8 @@ function nativeTargetCallback(receiver: *mut u8, selector: *mut u8, argument: *m
     if (context.kind === kindWindow()) {
       if (selector === select("windowWillClose:")) {
         dispatchNativeWindowClose(context.renderer, context.identity);
+      } else if (selector === select("windowDidResize:")) {
+        dispatchNativeWindowResize(context.renderer, context.identity);
       }
       return;
     }
@@ -2781,6 +2900,7 @@ function ensureActionClass(): *mut u8 {
     const rerender = select("tnuiRerender:");
     const frame = select("tnuiFrame:");
     const windowClose = select("windowWillClose:");
+    const windowResize = select("windowDidResize:");
     const windowShouldClose = select("windowShouldClose:");
     const encoding = cString("v@:@");
     const boolEncoding = cString("c@:@");
@@ -2797,6 +2917,7 @@ function ensureActionClass(): *mut u8 {
       class_addMethod(classPointerValue, rerender, nativeTargetCallback as *mut u8, encoding as *const u8);
       class_addMethod(classPointerValue, frame, nativeTargetCallback as *mut u8, encoding as *const u8);
       class_addMethod(classPointerValue, windowClose, nativeTargetCallback as *mut u8, encoding as *const u8);
+      class_addMethod(classPointerValue, windowResize, nativeTargetCallback as *mut u8, encoding as *const u8);
       class_addMethod(classPointerValue, windowShouldClose, nativeWindowShouldClose as *mut u8, boolEncoding as *const u8);
       rawFree(encoding);
       rawFree(boolEncoding);
@@ -2812,17 +2933,30 @@ function createActionTarget(rendererPointer: *mut u8, identity: u64, kind: i32):
   }
   let target: *mut u8 = nullRaw();
   unsafe {
-    target = class_createInstance(classPointerValue, sizeOf<NativeActionContext>()as c_size);
+    target = class_createInstance(classPointerValue, 0usize as c_size);
   }
   if (target === nullRaw()) {
     return nullRaw();
   }
+  let context = nullRaw();
   unsafe {
-    const offset = class_getInstanceSize(classPointerValue);
-    const address = byteAddress(target as *const u8, offset as usize)as *mut NativeActionContext;
-    storeRaw<NativeActionContext>(address, {
+    context = rawAlloc(sizeOf<NativeActionContext>());
+  }
+  if (context === nullRaw()) {
+    send(target, "release", nullRaw());
+    return nullRaw();
+  }
+  unsafe {
+    storeRaw<NativeActionContext>(context as *mut NativeActionContext, {
       renderer: rendererPointer, identity: identity, kind: kind,
     });
+    const box = send(classPointer("NSValue"), "valueWithPointer:", context);
+    if (box === nullRaw()) {
+      rawFree(context);
+      send(target, "release", nullRaw());
+      return nullRaw();
+    }
+    objc_setAssociatedObject(target, actionContextKey(), box, 1u64);
   }
   return target;
 }
@@ -2851,9 +2985,9 @@ function updateNativeProperties(native: *mut u8, element: &Element, initialize: 
     }
     sendBool(native, "setEditable:", element.isEditable());
     if (element.isMultiline()) {
-      sendBool(native, "setSelectable:", element.accessibilityEnabled());
+      sendBool(native, "setSelectable:", element.isEnabled());
     } else {
-      sendBool(native, "setEnabled:", element.accessibilityEnabled());
+      sendBool(native, "setEnabled:", element.isEnabled());
     }
     applyKeyboardType(native, element);
     applyNativeSelection(native, element);
@@ -2909,7 +3043,7 @@ function updateNativeProperties(native: *mut u8, element: &Element, initialize: 
   } else {
     sendIfSupported(native, "setAccessibilityRole:", nullRaw());
   }
-  sendBoolIfSupported(native, "setAccessibilityEnabled:", element.accessibilityEnabled());
+  sendBoolIfSupported(native, "setAccessibilityEnabled:", element.accessibilityEnabled() && element.isEnabled());
   sendBoolIfSupported(native, "setAccessibilityFocused:", element.isFocused());
   if (element.kind() === kindText() || element.kind() === kindButton()) {
     const value = element.text();
@@ -2936,7 +3070,7 @@ function updateNativeProperties(native: *mut u8, element: &Element, initialize: 
     sendBoolIfSupported(native, "setAccessibilitySelected:", true);
   }
   if (element.kind() === kindButton() || element.kind() === kindSwitch() || element.kind() === kindSlider() ||(element.kind() === kindTextInput() && !element.isMultiline())) {
-    sendBoolIfSupported(native, "setEnabled:", element.accessibilityEnabled());
+    sendBoolIfSupported(native, "setEnabled:", element.isEnabled());
   }
 }
 function accessibilityRoleName(code: i32): string {

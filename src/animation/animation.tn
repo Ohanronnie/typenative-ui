@@ -78,13 +78,19 @@ export class Animator {
   }
   public tick(delta: f64): usize {
     let changed: usize = 0;
-    let index: usize = 0;
-    while (index<this.animations.length) {
-      const animation = this.animations.atMut(index);
-      if (animation !== undefined && animation!.tick(delta)) {
-        changed = changed + 1usize;
+    let processed: usize = 0;
+    const total = this.animations.length;
+    while (processed<total) {
+      const animation = this.animations.pop();
+      if (animation !== undefined) {
+        if (animation!.tick(delta)) {
+          changed = changed + 1usize;
+        }
+        if (animation!.isRunning()) {
+          this.animations.push(move animation!);
+        }
       }
-      index = index + 1usize;
+      processed = processed + 1usize;
     }
     return changed;
   }
@@ -92,27 +98,29 @@ export class Animator {
     return this.animations.length;
   }
   public hasRunning(): bool {
-    let index: usize = 0;
-    while (index<this.animations.length) {
-      const animation = this.animations.at(index);
-      if (animation !== undefined && animation!.isRunning()) {
-        return true;
+    let found = false;
+    let processed: usize = 0;
+    const total = this.animations.length;
+    while (processed<total) {
+      const animation = this.animations.pop();
+      if (animation !== undefined) {
+        if (animation!.isRunning()) {
+          found = true;
+        }
+        this.animations.push(move animation!);
       }
-      index = index + 1usize;
+      processed = processed + 1usize;
     }
-    return false;
+    return found;
   }
   public clear(): void {
-    let index: usize = 0;
-    while (index<this.animations.length) {
-      const animation = this.animations.atMut(index);
+    while (this.animations.length > 0usize) {
+      const animation = this.animations.pop();
       if (animation !== undefined) {
         animation!.stop();
         animation!.clearUpdate();
       }
-      index = index + 1usize;
     }
-    this.animations.clear();
     this.resetClock();
   }
   public resetClock(): void {

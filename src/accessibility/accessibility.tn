@@ -1,26 +1,18 @@
 import { Array } from "std/collections";
 import { String } from "std/string";
-import { AccessibilityRole } from "../tnx-runtime";
+import { AccessibilityRole, Element, accessibilityRoleCode, hostChildAt, hostChildCount, kindButton, kindDialog, kindFragment, kindFunction, kindImage, kindText, kindTextInput, kindWindow } from "../tnx-runtime";
 
-export class AccessibilityNode {
+export struct AccessibilityNode {
+  public identity: u64;
+  public kind: i32;
   public role: AccessibilityRole;
   public label: string;
   public enabled: bool;
   public selected: bool;
   public focused: bool;
   public value: string;
+  public action: bool;
   public children: Array<AccessibilityNode>;
-  public constructor(role: AccessibilityRole, label: string) {
-    this.role = role;
-    this.label = move label;
-    this.enabled = true;
-    this.selected = false;
-    this.focused = false;
-    this.value = String("");
-    this.children = new Array<AccessibilityNode>({
-      capacity: 0
-    });
-  }
   public add(child: AccessibilityNode): void {
     this.children.push(move child);
   }
@@ -39,13 +31,103 @@ export class AccessibilityNode {
   public setValue(value: string): void {
     this.value = move value;
   }
+  public childAt(index: usize): &AccessibilityNode | undefined {
+    return this.children.at(index);
+  }
+  public hasAction(): bool {
+    return this.action;
+  }
+  public roleCode(): i32 {
+    return accessibilityRoleCode( &this.role);
+  }
+  public labelMatches(value: &str): bool {
+    return this.label === value;
+  }
+  public valueMatches(value: &str): bool {
+    return this.value === value;
+  }
+  public isEnabled(): bool {
+    return this.enabled;
+  }
+  public isFocused(): bool {
+    return this.focused;
+  }
 }
 export class AccessibilityTree {
   public root: AccessibilityNode;
   public constructor(root: AccessibilityNode) {
     this.root = move root;
   }
+  public rootNode(): &AccessibilityNode {
+    return &this.root;
+  }
 }
 export function accessibilityNode(role: AccessibilityRole, label: &str): AccessibilityNode {
-  return new AccessibilityNode(role, String(label));
+  return newAccessibilityNode(role, String(label));
+}
+function newAccessibilityNode(role: AccessibilityRole, label: string): AccessibilityNode {
+  return {
+    identity: 0u64, kind: 0i32, role: role, label: move label, enabled: true, selected: false, focused: false, value: String(""), action: false, children: new Array<AccessibilityNode>({
+      capacity: 0
+    }),
+  };
+}
+function nodeLabel(element: &Element): string {
+  if (element.hasAccessibilityLabel()) {
+    return element.accessibilityLabel();
+  }
+  if (element.kind() === kindText() || element.kind() === kindButton() || element.kind() === kindWindow() || element.kind() === kindImage() || element.kind() === kindDialog()) {
+    return element.text();
+  }
+  if (element.kind() === kindTextInput()) {
+    return element.placeholder();
+  }
+  return String("");
+}
+function nodeValue(element: &Element): string {
+  if (element.hasValue()) {
+    return element.value();
+  }
+  if (element.kind() === kindText()) {
+    return element.text();
+  }
+  return String("");
+}
+function appendElementChildren(element: &Element, node: &mut AccessibilityNode): void {
+  let index: usize = 0;
+  while (index<hostChildCount(element)) {
+    const child = hostChildAt(element, index);
+    if (child !== undefined) {
+      if (child!.kind() === kindFunction() || child!.kind() === kindFragment()) {
+        appendElementChildren(child!, node);
+      } else {
+        const childNode = accessibilityNodeFor(child!);
+        node.add(move childNode);
+      }
+    }
+    index = index + 1usize;
+  }
+}
+function accessibilityNodeFor(element: &Element): AccessibilityNode {
+  let node: AccessibilityNode = newAccessibilityNode(element.accessibilityRole(), nodeLabel(element));
+  if (element.hasMountIdentity()) {
+    node.identity = element.mountedIdentity();
+  }
+  node.kind = element.kind();
+  node.enabled = element.accessibilityEnabled() && element.isEnabled();
+  node.selected = element.isSelected() || element.isChecked();
+  node.focused = element.isFocused();
+  node.value = nodeValue(element);
+  node.action = element.hasAction();
+  appendElementChildren(element, &mut node);
+  return move node;
+}
+export function accessibilityTreeFor(element: &Element): AccessibilityTree {
+  if (element.kind() === kindFunction() || element.kind() === kindFragment()) {
+    let root: AccessibilityNode = newAccessibilityNode(AccessibilityRole.None, String(""));
+    root.kind = element.kind();
+    appendElementChildren(element, &mut root);
+    return new AccessibilityTree(move root);
+  }
+  return new AccessibilityTree(accessibilityNodeFor(element));
 }

@@ -1,20 +1,22 @@
 import { Button } from "../src/components";
-import { EmptyProps } from "../src/core/types";
 import { HeadlessRenderer } from "../src/renderer/headless";
 import { AccessibilityRole, Element, kindButton } from "../src/tnx-runtime";
 
 static mut presses: i32 = 0;
+struct ButtonState {
+  public enabled: bool;
+}
 function hit(): void {
   unsafe {
     presses = presses + 1i32;
   }
 }
-function Root(props: EmptyProps): Element {
-  return <Button onPress={hit}>Increment</Button>;
+function Root(props: ButtonState): Element {
+  return <Button enabled={props.enabled} onPress={hit}>Increment</Button>;
 }
 function main(): i32 {
   using renderer = new HeadlessRenderer();
-  renderer.mount(<Root />);
+  renderer.mount(<Root enabled={true} />);
   const button = renderer.rootElement();
   if (button.kind() !== kindButton()) {
     renderer.unmount();
@@ -36,7 +38,19 @@ function main(): i32 {
       return 13;
     }
   }
-  renderer.update(<Root />);
+  renderer.update(<Root enabled={false} />);
+  if (renderer.mutationCount() !== 1usize) {
+    renderer.unmount();
+    return 16;
+  }
+  renderer.simulatePress(renderer.rootElement());
+  unsafe {
+    if (presses !== 1i32) {
+      renderer.unmount();
+      return 17;
+    }
+  }
+  renderer.update(<Root enabled={true} />);
   const updated = renderer.rootElement();
   if (updated.kind() !== kindButton()) {
     renderer.unmount();

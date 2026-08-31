@@ -3,6 +3,9 @@ import { Priority, Scheduler, UiScheduler } from "../src/scheduler/scheduler";
 
 static mut order: i32 = 0;
 static mut runs: i32 = 0;
+static mut bulkRuns: usize = 0;
+static mut highRuns: i32 = 0;
+static mut normalRuns: i32 = 0;
 function mark(value: i32): void {
   unsafe {
     order = order * 10i32 + value;
@@ -10,6 +13,37 @@ function mark(value: i32): void {
   }
 }
 function noWork(): void {
+}
+function countWork(): void {
+  unsafe {
+    bulkRuns = bulkRuns + 1usize;
+  }
+}
+function markHigh(): void {
+  unsafe {
+    highRuns = highRuns + 1i32;
+  }
+}
+function markNormal(): void {
+  unsafe {
+    normalRuns = normalRuns + 1i32;
+  }
+}
+function executeMany(scheduler: &mut Scheduler): bool {
+  let index: usize = 0;
+  while (index<100000usize) {
+    scheduler.schedule(countWork);
+    index = index + 1usize;
+  }
+  if (scheduler.pendingCount() !== 100000usize) {
+    return false;
+  }
+  if (scheduler.flush(100000usize) !== 100000usize || scheduler.pendingCount() !== 0usize) {
+    return false;
+  }
+  unsafe {
+    return bulkRuns === 100000usize;
+  }
 }
 function cancelMany(scheduler: &mut Scheduler): bool {
   const jobs = new Array<u64>({
@@ -67,8 +101,37 @@ function main(): i32 {
       return 13;
     }
   }
+  if (!executeMany( &mut scheduler)) {
+    return 19;
+  }
   if (!cancelMany( &mut scheduler)) {
     return 18;
+  }
+  using fairness = new Scheduler();
+  fairness.schedule(markNormal);
+  let highIndex: usize = 0;
+  while (highIndex<16usize) {
+    fairness.scheduleWithPriority(Priority.Immediate, markHigh);
+    highIndex = highIndex + 1usize;
+  }
+  if (fairness.flushFor(0u64) !== 0usize) {
+    return 20;
+  }
+  if (fairness.flush(9usize) !== 9usize) {
+    return 21;
+  }
+  unsafe {
+    if (highRuns !== 8i32 || normalRuns !== 1i32) {
+      return 22;
+    }
+  }
+  if (fairness.flush(32usize) !== 8usize) {
+    return 23;
+  }
+  unsafe {
+    if (highRuns !== 16i32 || normalRuns !== 1i32) {
+      return 24;
+    }
   }
   unsafe {
     order = 0i32;
@@ -94,6 +157,14 @@ function main(): i32 {
     if (order !== 12i32 || runs !== 2i32) {
       return 17;
     }
+  }
+  using zeroBudget = new UiScheduler();
+  const zeroJob = zeroBudget.post(Priority.Normal, noWork);
+  if (zeroJob === undefined || zeroBudget.drainFor(0u64) !== 0usize || zeroBudget.pendingCount() !== 1usize) {
+    return 25;
+  }
+  if (zeroBudget.drain(1usize) !== 1usize || zeroBudget.pendingCount() !== 0usize) {
+    return 26;
   }
   return 0;
 }

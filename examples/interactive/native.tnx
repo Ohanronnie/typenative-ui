@@ -1,16 +1,33 @@
+import { i32ToUsize, usizeToU64 } from "std/alloc";
+import { Array } from "std/collections";
 import { String } from "std/string";
-import { Button, Element, Style, Text, View, Window, points, useState } from "../../src/index";
+import { Button, Element, Style, Text, TextInput, View, Window, points, useEffect, useMemo, useState } from "../../src/index";
 import { runApp } from "../../src/platform/macos";
 
 struct CounterProps {
 }
+function dependencies(value: i32): Array<u64> {
+  const values = new Array<u64>({
+    capacity: 1usize,
+  });
+  values.push(usizeToU64(i32ToUsize(value)));
+  return move values;
+}
+function onRender(): void {
+}
 function Counter(props: CounterProps): Element {
   const [current, setCount] = useState<i32>(0i32);
+  const [name, setName] = useState<string>(String(""));
+  const displayedCount = useMemo<i32, u64>(move(): i32 => current, dependencies(current));
+  useEffect(onRender, dependencies(current));
   const increment = move(): void => {
-    setCount(current + 1i32);
+    setCount((value) => value + 1i32);
+  };
+  const onNameChange = move(value: string): void => {
+    setName(move value);
   };
   let label: &str = "Count: 0";
-  if (current !== 0i32) {
+  if (displayedCount !== 0i32) {
     label = "Count: 1+";
   }
   const value = String(label);
@@ -20,7 +37,7 @@ function Counter(props: CounterProps): Element {
   return <Window title="TypeNative Counter">
     <View style={style}>
       <Text key="count">{value}</Text>
-      <Button key="increment" onPress={increment}>Increment</Button>
+      <TextInput key="name" value={name} onChangeText={onNameChange} placeholder="Name" /><Button key="increment" onPress={increment}>Increment</Button>
     </View>
   </Window>;
 }

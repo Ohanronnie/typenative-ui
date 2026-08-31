@@ -1,7 +1,7 @@
 import { u64ToUsize, usizeToU64 } from "std/alloc";
 import { Array } from "std/collections";
 import { Disposable } from "std/core";
-import { beginBatchFor, beginComponent, beginHookPassFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookOrderDiagnostic, HookRoot, setUpdateCallbackFor } from "../hooks/hooks";
+import { beginBatchFor, beginComponent, beginHookPassFor, clearDeferredUpdateCallbackFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookOrderDiagnostic, HookRoot, setDeferredUpdateCallbackFor, setUpdateCallbackFor } from "../hooks/hooks";
 import { accessibilityRoleCode, alignCode, displayCode, Element, flexDirectionCode, hostChildAt, hostChildCount, hostSetChild, justifyCode, Key, kindFunction, kindImage, kindProgress, kindSlider, kindSwitch, kindTextInput, leaf, lengthEquals, overflowCode, positionTypeCode, StyleSnapshot } from "../tnx-runtime";
 import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "./mutations";
 
@@ -46,7 +46,7 @@ function sameStyle(left: &StyleSnapshot, right: &StyleSnapshot): bool {
   return lengthEquals( &left.width, &right.width) && lengthEquals( &left.height, &right.height) && lengthEquals( &left.minWidth, &right.minWidth) && lengthEquals( &left.minHeight, &right.minHeight) && lengthEquals( &left.maxWidth, &right.maxWidth) && lengthEquals( &left.maxHeight, &right.maxHeight) && lengthEquals( &left.margin, &right.margin) && lengthEquals( &left.padding, &right.padding) && lengthEquals( &left.marginTop, &right.marginTop) && lengthEquals( &left.marginRight, &right.marginRight) && lengthEquals( &left.marginBottom, &right.marginBottom) && lengthEquals( &left.marginLeft, &right.marginLeft) && lengthEquals( &left.paddingTop, &right.paddingTop) && lengthEquals( &left.paddingRight, &right.paddingRight) && lengthEquals( &left.paddingBottom, &right.paddingBottom) && lengthEquals( &left.paddingLeft, &right.paddingLeft) && lengthEquals( &left.gap, &right.gap) && left.flex === right.flex && left.flexGrow === right.flexGrow && left.flexShrink === right.flexShrink && lengthEquals( &left.flexBasis, &right.flexBasis) && flexDirectionCode( &left.flexDirection) === flexDirectionCode( &right.flexDirection) && alignCode( &left.alignItems) === alignCode( &right.alignItems) && alignCode( &left.alignSelf) === alignCode( &right.alignSelf) && justifyCode( &left.justifyContent) === justifyCode( &right.justifyContent) && positionTypeCode( &left.positionType) === positionTypeCode( &right.positionType) && lengthEquals( &left.insetTop, &right.insetTop) && lengthEquals( &left.insetRight, &right.insetRight) && lengthEquals( &left.insetBottom, &right.insetBottom) && lengthEquals( &left.insetLeft, &right.insetLeft) && displayCode( &left.display) === displayCode( &right.display) && overflowCode( &left.overflow) === overflowCode( &right.overflow) && left.aspectRatio === right.aspectRatio && left.hasMarginEdges === right.hasMarginEdges && left.hasPaddingEdges === right.hasPaddingEdges;
 }
 function elementChanged(previous: &Element, next: &Element): bool {
-  if (!previous.textEquals(next) || previous.hasStyle() !== next.hasStyle() ||(previous.hasStyle() && !sameStyle( &previous.style(), &next.style())) || accessibilityRoleCode( &previous.accessibilityRole()) !== accessibilityRoleCode( &next.accessibilityRole()) || previous.accessibilityEnabled() !== next.accessibilityEnabled() || !previous.accessibilityLabelEquals(next) || previous.selected() !== next.selected()) {
+  if (!previous.textEquals(next) || previous.hasStyle() !== next.hasStyle() ||(previous.hasStyle() && !sameStyle( &previous.style(), &next.style())) || accessibilityRoleCode( &previous.accessibilityRole()) !== accessibilityRoleCode( &next.accessibilityRole()) || previous.accessibilityEnabled() !== next.accessibilityEnabled() || previous.isEnabled() !== next.isEnabled() || previous.allowsClose() !== next.allowsClose() || !previous.accessibilityLabelEquals(next) || previous.selected() !== next.selected()) {
     return true;
   }
   if (previous.kind() === kindTextInput() &&(!previous.valueEquals(next) || !previous.placeholderEquals(next) || previous.hasSelection() !== next.hasSelection() ||(previous.hasSelection() &&(previous.selectionStart() !== next.selectionStart() || previous.selectionEnd() !== next.selectionEnd())) || previous.isControlled() !== next.isControlled() || previous.isEditable() !== next.isEditable() || previous.autoFocus() !== next.autoFocus() || previous.keyboardTypeCode() !== next.keyboardTypeCode())) {
@@ -831,5 +831,11 @@ export class Reconciler implements Disposable {
   }
   public clearUpdateCallback(): void {
     clearUpdateCallbackFor( &mut this.hooks);
+  }
+  public setDeferredUpdateCallback(callback: () => void): void {
+    setDeferredUpdateCallbackFor( &mut this.hooks, move callback);
+  }
+  public clearDeferredUpdateCallback(): void {
+    clearDeferredUpdateCallbackFor( &mut this.hooks);
   }
 }

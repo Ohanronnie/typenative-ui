@@ -1,21 +1,34 @@
 import { Disposable } from "std/core";
+import { AccessibilityTree, accessibilityTreeFor } from "../accessibility/accessibility";
 import { HookOrderDiagnostic } from "../hooks/hooks";
 import { DuplicateKeyDiagnostic, Reconciler } from "../reconciler/reconciler";
 import { AccessibilityRole, Element, accessibilityRoleCode, dispatchPress, hostChildAt, isFocused } from "../tnx-runtime";
 
 export class HeadlessRenderer implements Disposable {
   private reconciler: Reconciler;
+  private accessibility?: AccessibilityTree;
   public constructor() {
     this.reconciler = new Reconciler();
+    this.accessibility = undefined;
+  }
+  private refreshAccessibility(): void {
+    if (!this.reconciler.isMounted()) {
+      this.accessibility = undefined;
+      return;
+    }
+    this.accessibility = accessibilityTreeFor(this.reconciler.rootElement());
   }
   public mount(root: Element): void {
     this.reconciler.mount(move root);
+    this.refreshAccessibility();
   }
   public update(root: Element): void {
     this.reconciler.update(move root);
+    this.refreshAccessibility();
   }
   public unmount(): void {
     this.reconciler.unmount();
+    this.accessibility = undefined;
   }
   public [Symbol.dispose](): void {
     this.unmount();
@@ -38,6 +51,12 @@ export class HeadlessRenderer implements Disposable {
   }
   public rootElement(): &Element {
     return this.reconciler.rootElement();
+  }
+  public accessibilityTree(): &AccessibilityTree | undefined {
+    if (this.accessibility === undefined) {
+      return undefined;
+    }
+    return &this.accessibility!;
   }
   public simulatePress(element: &Element): void {
     this.reconciler.beginBatch();
@@ -73,6 +92,7 @@ export class HeadlessRenderer implements Disposable {
   }
   public focus(element: &Element): void {
     this.reconciler.focusElement(element);
+    this.refreshAccessibility();
   }
   public isFocused(element: &Element): bool {
     return isFocused(element);
@@ -99,6 +119,7 @@ export class HeadlessRenderer implements Disposable {
   public focusFirst(kind: i32): void {
     if (this.reconciler.isMounted()) {
       this.reconciler.focusFirst(kind);
+      this.refreshAccessibility();
     }
   }
   public isFocusedFirst(kind: i32): bool {
