@@ -6,7 +6,7 @@ import { kindButton, kindText } from "../../src/tnx-runtime";
 struct DemoProps {
 }
 function Demo(props: DemoProps): Element {
-  const[current, setCount] = useState<i32>(0i32);
+  const [current, setCount] = useState<i32>(0i32);
   const increment = move(): void => {
     setCount(current + 1i32);
   };
@@ -16,28 +16,25 @@ function Demo(props: DemoProps): Element {
   }
   return <Window title="TypeNative UI Demo">
     <View>
-      <Text>
-        {
-          String(label)}
-        </Text>
-        <Text>TypeNative UI</Text>
-        <Button onPress={increment}>Increment</Button>
-      </View>
-    </Window>;
+      <Text>{String(label)}</Text>
+      <Text>TypeNative UI</Text>
+      <Button onPress={increment}>Increment</Button>
+    </View>
+  </Window>;
+}
+function main(): i32 {
+  using renderer = new HeadlessRenderer();
+  renderer.mount(<Demo />);
+  if (!renderer.hasKind(kindButton())) {
+    log("missing button");
+    return 10;
   }
-  function main(): i32 {
-    using renderer = new HeadlessRenderer();
-    renderer.mount(<Demo />);
-    if (!renderer.hasKind(kindButton())) {
-      log("missing button");
-      return 10;
-    }
-    renderer.simulatePressFirst(kindButton());
-    renderer.update(<Demo />);
-    if (renderer.textLengthFirst(kindText()) !== 8usize) {
-      log("state update did not change the label");
-      return 11;
-    }
-    renderer.unmount();
-    return 0;
+  renderer.simulatePressFirst(kindButton());
+  renderer.update(<Demo />);
+  if (renderer.textLengthFirst(kindText()) !== 8usize) {
+    log("state update did not change the label");
+    return 11;
   }
+  renderer.unmount();
+  return 0;
+}

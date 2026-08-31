@@ -56,7 +56,7 @@ struct ItemProps {
   public seed: i32;
 }
 function Item(props: ItemProps): Element {
-  const[current, _setCurrent] = useState<i32>(props.seed);
+  const [current, _setCurrent] = useState<i32>(props.seed);
   unsafe {
     if (props.id === 1i32) {
       seenA = current;

@@ -16,7 +16,7 @@ Layout-specific types and the Yoga adapter are also available directly from
 ## Build the macOS example
 
 The repository targets Apple arm64 and uses the pinned TypeNative compiler
-revision `b21b13108c9b9a5c35f69bb33b660a3e1a1a756b`.
+revision `acccdc2a950d5f05a423308e8641f5f1cda15116`.
 
 ```sh
 git clone https://github.com/Ohanronnie/typenative-ui.git
@@ -51,7 +51,7 @@ function Counter(props: CounterProps): Element {
   };
   let label: &str = "Count: 0";
   if (current !== 0i32) {
-    label = "Count: 1";
+    label = "Count: 1+";
   }
   return <View>
     <Text>{String(label)}</Text>

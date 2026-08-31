@@ -53,8 +53,8 @@ struct CounterProps {
   public context: &Context<i32>;
 }
 function Counter(props: CounterProps): Element {
-  const[current, setState] = useState<i32>(0i32);
-  const[reduced, dispatch] = useReducer<i32, i32>(add, 0i32);
+  const [current, setState] = useState<i32>(0i32);
+  const [reduced, dispatch] = useReducer<i32, i32>(add, 0i32);
   const theme = useContext<i32>(props.context);
   const reference = useRef<i32>(0i32);
   reference.write(current);
@@ -89,53 +89,50 @@ function Counter(props: CounterProps): Element {
   };
   const callback = useCallback(increment, stableDependencies());
   return <View>
-    <Text>
-      {
-        String(label)}
-      </Text>
-      <Button onPress={callback}>Increment</Button>
-    </View>;
-  }
-  function main(): i32 {
-    using renderer = new HeadlessRenderer();
-    const context = createContext<i32>(7i32);
-    renderer.mount(<Counter context={ &context} />);
-    if (!renderer.hasKind(kindButton()) || renderer.textLengthFirst(kindButton()) !== 9usize) {
-      renderer.unmount();
-      return 10;
-    }
-    renderer.focusFirst(kindButton());
-    if (!renderer.isFocusedFirst(kindButton())) {
-      renderer.unmount();
-      return 11;
-    }
-    renderer.setUpdateCallback(notifyUpdate);
-    renderer.simulatePressFirst(kindButton());
-    renderer.update(<Counter context={ &context} />);
-    const validText = renderer.textLengthFirst(kindText()) === 8usize;
-    let validHooks = false;
-    unsafe {
-      validHooks = validText && latestCount === 1i32 && latestReduced === 1i32 && latestMemo === 0i32 && latestRef === 1i32 && latestDeferred === 1i32 && latestTheme === 7i32 && stableId === latestId && layoutRuns === 1i32 && passiveRuns === 1i32 && updateNotifications === 1i32;
-    }
-    if (!validHooks) {
-      renderer.unmount();
-      return 12;
-    }
-    context.provide(9i32);
-    renderer.update(<Counter context={ &context} />);
-    unsafe {
-      if (latestTheme !== 9i32) {
-        renderer.unmount();
-        return 14;
-      }
-    }
+    <Text>{String(label)}</Text>
+    <Button onPress={callback}>Increment</Button>
+  </View>;
+}
+function main(): i32 {
+  using renderer = new HeadlessRenderer();
+  const context = createContext<i32>(7i32);
+  renderer.mount(<Counter context={ &context} />);
+  if (!renderer.hasKind(kindButton()) || renderer.textLengthFirst(kindButton()) !== 9usize) {
     renderer.unmount();
-    let validCleanup = false;
-    unsafe {
-      validCleanup = cleanups === 2i32;
-    }
-    if (!validCleanup) {
-      return 15;
-    }
-    return 0;
+    return 10;
   }
+  renderer.focusFirst(kindButton());
+  if (!renderer.isFocusedFirst(kindButton())) {
+    renderer.unmount();
+    return 11;
+  }
+  renderer.setUpdateCallback(notifyUpdate);
+  renderer.simulatePressFirst(kindButton());
+  renderer.update(<Counter context={ &context} />);
+  const validText = renderer.textLengthFirst(kindText()) === 8usize;
+  let validHooks = false;
+  unsafe {
+    validHooks = validText && latestCount === 1i32 && latestReduced === 1i32 && latestMemo === 0i32 && latestRef === 1i32 && latestDeferred === 1i32 && latestTheme === 7i32 && stableId === latestId && layoutRuns === 1i32 && passiveRuns === 1i32 && updateNotifications === 1i32;
+  }
+  if (!validHooks) {
+    renderer.unmount();
+    return 12;
+  }
+  context.provide(9i32);
+  renderer.update(<Counter context={ &context} />);
+  unsafe {
+    if (latestTheme !== 9i32) {
+      renderer.unmount();
+      return 14;
+    }
+  }
+  renderer.unmount();
+  let validCleanup = false;
+  unsafe {
+    validCleanup = cleanups === 2i32;
+  }
+  if (!validCleanup) {
+    return 15;
+  }
+  return 0;
+}

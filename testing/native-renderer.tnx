@@ -76,7 +76,7 @@ function elementHasFocusChangeByIdentity(element: &Element, identity: u64): bool
   return false;
 }
 function Smoke(props: SmokeProps): Element {
-  const[current, setPresses] = useState<i32>(0i32);
+  const [current, setPresses] = useState<i32>(0i32);
   const press = move(): void => {
     setPresses(current + 1i32);
   };
@@ -107,129 +107,126 @@ function Smoke(props: SmokeProps): Element {
   return <Window title="TypeNative Native Smoke">
     <View>
       <Text>Hello</Text>
-      <Text>
-        {
-          label}
-        </Text>
-        <Button onPress={press} elementRef={props.buttonRef}>Press</Button>
-        <TextInput defaultValue={String("héllo")} placeholder={String("Name")} onChangeText={change} onSubmitEditing={submit} onFocus={focus} onBlur={blur} editable={true} selection={{ start: 1usize, end: 3usize }} keyboardType={KeyboardType.Email} elementRef={props.inputRef} />
-      </View>
-    </Window>;
+      <Text>{label}</Text>
+      <Button onPress={press} elementRef={props.buttonRef}>Press</Button>
+      <TextInput defaultValue={String("héllo")} placeholder={String("Name")} onChangeText={change} onSubmitEditing={submit} onFocus={focus} onBlur={blur} editable={true} selection={{ start: 1usize, end: 3usize }} keyboardType={KeyboardType.Email} elementRef={props.inputRef} />
+    </View>
+  </Window>;
+}
+function main(): i32 {
+  let inputRef = createElementRef();
+  let buttonRef = createElementRef();
+  using renderer = new NativeRenderer();
+  const factory =(): Element => <Smoke inputRef={ &inputRef} buttonRef={ &buttonRef} />;
+  if (!renderer.mountFactory(move factory)) {
+    return 1;
   }
-  function main(): i32 {
-    let inputRef = createElementRef();
-    let buttonRef = createElementRef();
-    using renderer = new NativeRenderer();
-    const factory =(): Element => <Smoke inputRef={ &inputRef} buttonRef={ &buttonRef} />;
-    if (!renderer.mountFactory(move factory)) {
-      return 1;
-    }
-    if (!renderer.isMounted() || !renderer.hasWindow()) {
-      return 2;
-    }
-    if (!inputRef.isAttached()) {
-      return 3;
-    }
-    if (!buttonRef.isAttached()) {
-      return 4;
-    }
-    const buttonIdentity = buttonRef.nodeIdentity();
-    if (buttonIdentity === undefined) {
-      return 5;
-    }
-    const initialIdentity = inputRef.nodeIdentity();
-    if (initialIdentity === undefined) {
-      return 10;
-    }
-    if (elementKindByIdentity(renderer.rootElement(), initialIdentity!) !== kindTextInput()) {
-      return 19;
-    }
-    if (elementValueByIdentity(renderer.rootElement(), initialIdentity!) !== "héllo") {
-      return 20;
-    }
-    if (renderer.inputValue(initialIdentity!) !== "héllo") {
-      return 11;
-    }
-    if (renderer.inputPlaceholder(initialIdentity!) !== "Name") {
-      return 18;
-    }
-    if (!elementHasSubmitByIdentity(renderer.rootElement(), initialIdentity!)) {
-      return 121;
-    }
-    if (!elementHasFocusChangeByIdentity(renderer.rootElement(), initialIdentity!)) {
-      return 122;
-    }
-    unsafe {
-      const windowPointer = renderer.windowHandle();
-      if (windowPointer === nullPointer<u8>()) {
-        return 6;
-      }
-      renderer.dispatchAction(buttonIdentity!);
-      if (renderer.mutationCount() === 0usize) {
-        return 7;
-      }
-      if (renderer.windowHandle() !== windowPointer) {
-        return 8;
-      }
-    }
-    if (!buttonRef.isAttached()) {
-      return 9;
-    }
-    const identity = inputRef.nodeIdentity();
-    if (identity === undefined) {
-      return 10;
-    }
-    if (!elementHasSubmitByIdentity(renderer.rootElement(), identity!)) {
-      return 123;
-    }
-    if (!elementHasFocusChangeByIdentity(renderer.rootElement(), identity!)) {
-      return 124;
-    }
-    if (!renderer.focusIdentity(identity!)) {
-      return 12;
-    }
-    const focusedIdentity = renderer.focusedIdentity();
-    if (focusedIdentity === undefined || focusedIdentity! !== identity!) {
-      return 144;
-    }
-    unsafe {
-      if (focusCount === 0i32) {
-        return 145;
-      }
-    }
-    const selection = renderer.inputSelection(identity!);
-    if (selection.start !== 1usize || selection.end !== 3usize) {
-      return 13;
-    }
-    if (!renderer.dispatchSubmit(identity!)) {
-      return 125;
-    }
-    renderer.dispatchFocusChange(identity!, false);
-    unsafe {
-      if (submitCount !== 1i32) {
-        return 141;
-      }
-      if (focusCount === 0i32) {
-        return 142;
-      }
-      if (blurCount === 0i32) {
-        return 143;
-      }
-    }
-    if (!renderer.dispatchTextChange(identity!, String("typed"))) {
-      return 15;
-    }
-    unsafe {
-      if (textChangeCount !== 1i32) {
-        return 16;
-      }
-    }
-    renderer.close();
-    if (inputRef.isAttached()) {
-      return 17;
-    }
-    if (buttonRef.isAttached()) {
-      return 18;
-    }
-    return 0;
+  if (!renderer.isMounted() || !renderer.hasWindow()) {
+    return 2;
   }
+  if (!inputRef.isAttached()) {
+    return 3;
+  }
+  if (!buttonRef.isAttached()) {
+    return 4;
+  }
+  const buttonIdentity = buttonRef.nodeIdentity();
+  if (buttonIdentity === undefined) {
+    return 5;
+  }
+  const initialIdentity = inputRef.nodeIdentity();
+  if (initialIdentity === undefined) {
+    return 10;
+  }
+  if (elementKindByIdentity(renderer.rootElement(), initialIdentity!) !== kindTextInput()) {
+    return 19;
+  }
+  if (elementValueByIdentity(renderer.rootElement(), initialIdentity!) !== "héllo") {
+    return 20;
+  }
+  if (renderer.inputValue(initialIdentity!) !== "héllo") {
+    return 11;
+  }
+  if (renderer.inputPlaceholder(initialIdentity!) !== "Name") {
+    return 18;
+  }
+  if (!elementHasSubmitByIdentity(renderer.rootElement(), initialIdentity!)) {
+    return 121;
+  }
+  if (!elementHasFocusChangeByIdentity(renderer.rootElement(), initialIdentity!)) {
+    return 122;
+  }
+  unsafe {
+    const windowPointer = renderer.windowHandle();
+    if (windowPointer === nullPointer<u8>()) {
+      return 6;
+    }
+    renderer.dispatchAction(buttonIdentity!);
+    if (renderer.mutationCount() === 0usize) {
+      return 7;
+    }
+    if (renderer.windowHandle() !== windowPointer) {
+      return 8;
+    }
+  }
+  if (!buttonRef.isAttached()) {
+    return 9;
+  }
+  const identity = inputRef.nodeIdentity();
+  if (identity === undefined) {
+    return 10;
+  }
+  if (!elementHasSubmitByIdentity(renderer.rootElement(), identity!)) {
+    return 123;
+  }
+  if (!elementHasFocusChangeByIdentity(renderer.rootElement(), identity!)) {
+    return 124;
+  }
+  if (!renderer.focusIdentity(identity!)) {
+    return 12;
+  }
+  const focusedIdentity = renderer.focusedIdentity();
+  if (focusedIdentity === undefined || focusedIdentity! !== identity!) {
+    return 144;
+  }
+  unsafe {
+    if (focusCount === 0i32) {
+      return 145;
+    }
+  }
+  const selection = renderer.inputSelection(identity!);
+  if (selection.start !== 1usize || selection.end !== 3usize) {
+    return 13;
+  }
+  if (!renderer.dispatchSubmit(identity!)) {
+    return 125;
+  }
+  renderer.dispatchFocusChange(identity!, false);
+  unsafe {
+    if (submitCount !== 1i32) {
+      return 141;
+    }
+    if (focusCount === 0i32) {
+      return 142;
+    }
+    if (blurCount === 0i32) {
+      return 143;
+    }
+  }
+  if (!renderer.dispatchTextChange(identity!, String("typed"))) {
+    return 15;
+  }
+  unsafe {
+    if (textChangeCount !== 1i32) {
+      return 16;
+    }
+  }
+  renderer.close();
+  if (inputRef.isAttached()) {
+    return 17;
+  }
+  if (buttonRef.isAttached()) {
+    return 18;
+  }
+  return 0;
+}

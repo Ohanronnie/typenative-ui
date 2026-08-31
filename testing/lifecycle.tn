@@ -27,7 +27,7 @@ function stableDependencies(): Array<u64> {
 struct StructMarker {
 }
 function Probe(props: StructMarker): Element {
-  const[current, _setCurrent] = useState<i32>(4i32);
+  const [current, _setCurrent] = useState<i32>(4i32);
   useEffect(effect, stableDependencies());
   if (current !== 4i32) {
     return createText("bad");

@@ -5,13 +5,13 @@ import { runApp } from "../../src/platform/macos";
 struct CounterProps {
 }
 function Counter(props: CounterProps): Element {
-  const[current, setCount] = useState<i32>(0i32);
+  const [current, setCount] = useState<i32>(0i32);
   const increment = move(): void => {
     setCount(current + 1i32);
   };
   let label: &str = "Count: 0";
   if (current !== 0i32) {
-    label = "Count: 1";
+    label = "Count: 1+";
   }
   const value = String(label);
   const style = new Style();
@@ -19,14 +19,11 @@ function Counter(props: CounterProps): Element {
   style.gap = points(12.0f32);
   return <Window title="TypeNative Counter">
     <View style={style}>
-      <Text key="count">
-        {
-          value}
-        </Text>
-        <Button key="increment" onPress={increment}>Increment</Button>
-      </View>
-    </Window>;
-  }
-  function main(): i32 {
-    return runApp(move(): Element => <Counter />);
-  }
+      <Text key="count">{value}</Text>
+      <Button key="increment" onPress={increment}>Increment</Button>
+    </View>
+  </Window>;
+}
+function main(): i32 {
+  return runApp(move(): Element => <Counter />);
+}
