@@ -12,6 +12,8 @@ static mut blurCount: i32 = 0;
 struct SmokeProps {
   public inputRef: &ElementRef;
   public buttonRef: &ElementRef;
+  public selectionStart: usize;
+  public selectionEnd: usize;
 }
 function elementKindByIdentity(element: &Element, identity: u64): i32 {
   if (element.hasMountIdentity() && element.mountedIdentity() === identity) {
@@ -109,7 +111,7 @@ function Smoke(props: SmokeProps): Element {
       <Text>Hello</Text>
       <Text>{label}</Text>
       <Button onPress={press} elementRef={props.buttonRef}>Press</Button>
-      <TextInput defaultValue={String("héllo")} placeholder={String("Name")} onChangeText={change} onSubmitEditing={submit} onFocus={focus} onBlur={blur} editable={true} selection={{ start: 1usize, end: 3usize }} keyboardType={KeyboardType.Email} elementRef={props.inputRef} />
+      <TextInput defaultValue={String("héllo")} placeholder={String("Name")} onChangeText={change} onSubmitEditing={submit} onFocus={focus} onBlur={blur} editable={true} selection={{ start: props.selectionStart, end: props.selectionEnd }} keyboardType={KeyboardType.Email} elementRef={props.inputRef} />
     </View>
   </Window>;
 }
@@ -117,7 +119,7 @@ function main(): i32 {
   let inputRef = createElementRef();
   let buttonRef = createElementRef();
   using renderer = new NativeRenderer();
-  const factory =(): Element => <Smoke inputRef={ &inputRef} buttonRef={ &buttonRef} />;
+  const factory =(): Element => <Smoke inputRef={ &inputRef} buttonRef={ &buttonRef} selectionStart={1usize} selectionEnd={3usize} />;
   if (!renderer.mountFactory(move factory)) {
     return 1;
   }
@@ -197,6 +199,11 @@ function main(): i32 {
   const selection = renderer.inputSelection(identity!);
   if (selection.start !== 1usize || selection.end !== 3usize) {
     return 13;
+  }
+  renderer.update(<Smoke inputRef={ &inputRef} buttonRef={ &buttonRef} selectionStart={4usize} selectionEnd={4usize} />);
+  const updatedSelection = renderer.inputSelection(identity!);
+  if (updatedSelection.start !== 4usize || updatedSelection.end !== 4usize) {
+    return 146;
   }
   if (!renderer.dispatchSubmit(identity!)) {
     return 125;

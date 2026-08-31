@@ -157,12 +157,8 @@ export unsafe function applyStyleSnapshot(node: *mut u8, style: &StyleSnapshot):
     setDimension(node, &style.minHeight, false, true, false);
     setDimension(node, &style.maxWidth, true, false, true);
     setDimension(node, &style.maxHeight, false, false, true);
-    if (style.flex !== 0.0f32) {
-      YGNodeStyleSetFlex(node, style.flex);
-    }
-    if (style.flexGrow !== 0.0f32) {
-      YGNodeStyleSetFlexGrow(node, style.flexGrow);
-    }
+    YGNodeStyleSetFlex(node, style.flex);
+    YGNodeStyleSetFlexGrow(node, style.flexGrow);
     YGNodeStyleSetFlexShrink(node, style.flexShrink);
     if (lengthKind( &style.flexBasis) === 0i32) {
       YGNodeStyleSetFlexBasisAuto(node);
@@ -220,9 +216,7 @@ export unsafe function applyStyleSnapshot(node: *mut u8, style: &StyleSnapshot):
     } else {
       YGNodeStyleSetPositionAuto(node, 0i32);
     }
-    if (style.aspectRatio > 0.0f32) {
-      YGNodeStyleSetAspectRatio(node, style.aspectRatio);
-    }
+    YGNodeStyleSetAspectRatio(node, style.aspectRatio);
   }
 }
 export class LayoutNode implements Disposable {

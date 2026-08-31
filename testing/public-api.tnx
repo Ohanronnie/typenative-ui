@@ -1,6 +1,6 @@
 import { EmptyProps } from "../src/core/types";
 import { Button, createHeadlessRenderer, createReconciler, createScheduler, createUiScheduler, Element, Text, View, Window } from "../src/index";
-import { kindText } from "../src/tnx-runtime";
+import { createElement as runtimeCreateElement, kindText, keyNone } from "../src/tnx-runtime";
 
 function hit(): void {
 }
@@ -13,6 +13,16 @@ function Root(props: EmptyProps): Element {
   </Window>;
 }
 function main(): i32 {
+  let jsxElement = <Root />;
+  let directElement = runtimeCreateElement<EmptyProps>(Root, {
+  }, keyNone());
+  if (!jsxElement.sameComponent( &directElement) || jsxElement.typeId() !== directElement.typeId() || !jsxElement.keyEquals( &directElement)) {
+    jsxElement.dispose();
+    directElement.dispose();
+    return 9;
+  }
+  jsxElement.dispose();
+  directElement.dispose();
   using renderer = createHeadlessRenderer();
   renderer.mount(<Root />);
   if (!renderer.hasKind(kindText())) {

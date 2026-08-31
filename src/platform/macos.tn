@@ -33,6 +33,10 @@ extern struct NativeRange {
   public location: u64;
   public length: u64;
 }
+export struct WindowContentSize {
+  public width: f32;
+  public height: f32;
+}
 declare extern "C" {
   function NSApplicationLoad(): bool;
   function pthread_main_np(): i32;
@@ -2644,6 +2648,41 @@ export class NativeRenderer implements Disposable {
       return nullRaw();
     }
     return recordNative( &mut this.records, windowId!);
+  }
+  public windowTitleAt(index: usize): string {
+    const windowId = intAt( &this.windows, index);
+    if (windowId === undefined) {
+      return String("");
+    }
+    const window = recordNative( &mut this.records, windowId!);
+    if (window === nullRaw()) {
+      return String("");
+    }
+    return copyNativeString(send(window, "title", nullRaw()));
+  }
+  public windowContentSizeAt(index: usize): WindowContentSize {
+    const windowId = intAt( &this.windows, index);
+    if (windowId === undefined) {
+      return {
+        width: 0.0f32, height: 0.0f32,
+      };
+    }
+    const window = recordNative( &mut this.records, windowId!);
+    if (window === nullRaw()) {
+      return {
+        width: 0.0f32, height: 0.0f32,
+      };
+    }
+    const content = send(window, "contentView", nullRaw());
+    if (content === nullRaw()) {
+      return {
+        width: 0.0f32, height: 0.0f32,
+      };
+    }
+    const bounds = sendNativeRect(content, "bounds");
+    return {
+      width: bounds.width as f32, height: bounds.height as f32,
+    };
   }
   public mutationCount(): usize {
     return this.reconciler.mutationCount();

@@ -6,8 +6,6 @@ import { String } from "std/string";
 
 declare extern "C" {
   function tn_bytes_hash(bytes: *const u8, length: c_size): u64;
-  function tn_string_equals(left: *const u8, leftLength: c_size, right: *const u8, rightLength: c_size): i32;
-  function tn_string_length(bytes: *const u8): c_size;
 }
 export enum ElementKind {
   Empty, Component, View, Text, Button, Window, Fragment, TextInput, Image, ScrollView, List, Switch, Slider, Progress, Menu, Dialog, Toolbar, SplitView, Stack, Grid, Canvas,
@@ -173,9 +171,7 @@ export struct Key {
       return true;
     }
     if (this.kind === 1i32) {
-      unsafe {
-        return rawStringsEqual(this.text as *const u8, other.text as *const u8);
-      }
+      return this.text === other.text;
     }
     return this.integer === other.integer;
   }
@@ -236,11 +232,6 @@ function emptyKey(): Key {
   return {
     kind: 0i32, text: String(""), integer: 0u64, identity: 0u64,
   };
-}
-function rawStringsEqual(left: *const u8, right: *const u8): bool {
-  unsafe {
-    return tn_string_equals(left, tn_string_length(left), right, tn_string_length(right)) !== 0i32;
-  }
 }
 function emptyChildren(): Array<Element> {
   return new Array<Element>({
@@ -484,9 +475,7 @@ export struct Element {
       return true;
     }
     if (this.node.key.kind === 1i32) {
-      unsafe {
-        return rawStringsEqual(this.node.key.text as *const u8, other.node.key.text as *const u8);
-      }
+      return this.node.key.text === other.node.key.text;
     }
     return this.node.key.integer === other.node.key.integer;
   }
@@ -527,9 +516,7 @@ export struct Element {
     return this.node.text.clone();
   }
   public textEquals(other: &Element): bool {
-    unsafe {
-      return rawStringsEqual(this.node.text as *const u8, other.node.text as *const u8);
-    }
+    return this.node.text === other.node.text;
   }
   public textLength(): usize {
     const value = this.node.text.clone();
@@ -783,17 +770,13 @@ export struct Element {
     return this.node.value.clone();
   }
   public valueEquals(other: &Element): bool {
-    unsafe {
-      return rawStringsEqual(this.node.value as *const u8, other.node.value as *const u8);
-    }
+    return this.node.value === other.node.value;
   }
   public placeholder(): string {
     return this.node.placeholder.clone();
   }
   public placeholderEquals(other: &Element): bool {
-    unsafe {
-      return rawStringsEqual(this.node.placeholder as *const u8, other.node.placeholder as *const u8);
-    }
+    return this.node.placeholder === other.node.placeholder;
   }
   public setValue(value: string): void {
     this.node.value = move value;
@@ -806,9 +789,7 @@ export struct Element {
     return this.node.imageSource.clone();
   }
   public imageSourceEquals(other: &Element): bool {
-    unsafe {
-      return rawStringsEqual(this.node.imageSource as *const u8, other.node.imageSource as *const u8);
-    }
+    return this.node.imageSource === other.node.imageSource;
   }
   public setImageSource(value: string): void {
     this.node.imageSource = move value;
@@ -827,9 +808,7 @@ export struct Element {
     if (!this.node.accessibilityLabelPresent) {
       return true;
     }
-    unsafe {
-      return rawStringsEqual(this.node.accessibilityLabel as *const u8, other.node.accessibilityLabel as *const u8);
-    }
+    return this.node.accessibilityLabel === other.node.accessibilityLabel;
   }
   public hasAccessibilityLabel(): bool {
     return this.node.accessibilityLabelPresent;
@@ -907,7 +886,7 @@ export struct Element {
       this.node.value = previous.node.value.clone();
       this.node.hasValue = true;
     }
-    if (previous.node.hasSelection) {
+    if (!this.node.hasSelection && previous.node.hasSelection) {
       this.node.selectionStart = previous.node.selectionStart;
       this.node.selectionEnd = previous.node.selectionEnd;
       this.node.hasSelection = true;

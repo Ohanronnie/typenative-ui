@@ -15,7 +15,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: Ohanronnie/typenative
-          ref: 7ebacc8d1ac92e7bc201b6619ef470d3ecf93c02
+          ref: 3097695b871d230b40635e71129a5407c395d6bc
           path: .compiler
       - name: Install LLVM 22.1.8
         run: |
@@ -36,5 +36,7 @@ jobs:
         run: .compiler/target/release/tn fmt --check src examples testing benchmarks
       - name: Check TypeNative sources
         run: .compiler/target/release/tn check typenative.json
+      - name: Verify clean clone
+        run: sh scripts/verify-clean-clone.sh .compiler/target/release/tn
       - name: Run framework verification
         run: scripts/run-tests.sh .compiler/target/release/tn

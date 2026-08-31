@@ -4,7 +4,7 @@ import { String } from "std/string";
 import { Button, Element, Style, Text, TextInput, View, Window, points, useEffect, useMemo, useState } from "../../src/index";
 import { runApp } from "../../src/platform/macos";
 
-struct CounterProps {
+struct AppProps {
 }
 function dependencies(value: i32): Array<u64> {
   const values = new Array<u64>({
@@ -15,7 +15,7 @@ function dependencies(value: i32): Array<u64> {
 }
 function onRender(): void {
 }
-function Counter(props: CounterProps): Element {
+function App(props: AppProps): Element {
   const [current, setCount] = useState<i32>(0i32);
   const [name, setName] = useState<string>(String(""));
   const displayedCount = useMemo<i32, u64>(move(): i32 => current, dependencies(current));
@@ -34,7 +34,7 @@ function Counter(props: CounterProps): Element {
   const style = new Style();
   style.flexGrow = 1.0f32;
   style.gap = points(12.0f32);
-  return <Window title="TypeNative Counter">
+  return <Window title="TypeNative UI" width={points(800.0f32)} height={points(520.0f32)}>
     <View style={style}>
       <Text key="count">{value}</Text>
       <TextInput key="name" value={name} onChangeText={onNameChange} placeholder="Name" /><Button key="increment" onPress={increment}>Increment</Button>
@@ -42,5 +42,5 @@ function Counter(props: CounterProps): Element {
   </Window>;
 }
 function main(): i32 {
-  return runApp(move(): Element => <Counter />);
+  return runApp(move(): Element => <App />);
 }

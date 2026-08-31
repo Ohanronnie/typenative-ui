@@ -1,11 +1,12 @@
+import { String } from "std/string";
 import { Text, View, Window } from "../src/components";
 import { points } from "../src/core/types";
 import { NativeRenderer } from "../src/platform/macos";
 import { Element, ElementRef, WindowClosePolicy, createElementRef } from "../src/tnx-runtime";
 
-function windowTree(firstRef: &ElementRef, secondRef: &ElementRef): Element {
+function windowTree(firstRef: &ElementRef, secondRef: &ElementRef, firstTitle: string, firstWidth: f32): Element {
   return <>
-    <Window title="First window" width={points(320.0f32)} height={points(180.0f32)} closePolicy={WindowClosePolicy.Prevent} elementRef={firstRef}>
+    <Window title={firstTitle} width={points(firstWidth)} height={points(180.0f32)} closePolicy={WindowClosePolicy.Prevent} elementRef={firstRef}>
       <View>
         <Text>First</Text>
       </View>
@@ -21,7 +22,7 @@ function main(): i32 {
   using renderer = new NativeRenderer();
   let firstRef = createElementRef();
   let secondRef = createElementRef();
-  let root = windowTree( &firstRef, &secondRef);
+  let root = windowTree( &firstRef, &secondRef, String("First window"), 320.0f32);
   if (!renderer.mount(move root) || renderer.windowCount() !== 2usize) {
     renderer.close();
     return 1;
@@ -38,12 +39,32 @@ function main(): i32 {
   }
   const firstIdentity = firstRef.nodeIdentity();
   const secondIdentity = secondRef.nodeIdentity();
+  if (renderer.windowTitleAt(0usize) !== "First window" || renderer.windowTitleAt(1usize) !== "Second window") {
+    renderer.close();
+    return 8;
+  }
+  const firstSize = renderer.windowContentSizeAt(0usize);
+  const secondSize = renderer.windowContentSizeAt(1usize);
+  if (firstSize.width<319.0f32 || firstSize.width > 321.0f32 || firstSize.height<179.0f32 || firstSize.height > 181.0f32 || secondSize.width<359.0f32 || secondSize.width > 361.0f32 || secondSize.height<219.0f32 || secondSize.height > 221.0f32) {
+    renderer.close();
+    return 9;
+  }
   if (firstIdentity === undefined || secondIdentity === undefined || renderer.windowShouldClose(firstIdentity!) || !renderer.windowShouldClose(secondIdentity!)) {
     renderer.close();
     return 4;
   }
   unsafe {
     const firstHandle = renderer.windowHandleAt(0usize);
+    renderer.update(windowTree( &firstRef, &secondRef, String("Updated window"), 420.0f32));
+    if (renderer.windowTitleAt(0usize) !== "Updated window") {
+      renderer.close();
+      return 10;
+    }
+    const updatedSize = renderer.windowContentSizeAt(0usize);
+    if (updatedSize.width<419.0f32 || updatedSize.width > 421.0f32) {
+      renderer.close();
+      return 11;
+    }
     renderer.dispatchWindowWillClose(secondIdentity!);
     if (renderer.windowCount() !== 1usize || renderer.windowHandleAt(0usize) !== firstHandle) {
       renderer.close();

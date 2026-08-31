@@ -16,7 +16,7 @@ Layout-specific types and the Yoga adapter are also available directly from
 ## Build the macOS example
 
 The repository targets Apple arm64 and uses the pinned TypeNative compiler
-revision `7ebacc8d1ac92e7bc201b6619ef470d3ecf93c02`.
+revision `3097695b871d230b40635e71129a5407c395d6bc`.
 
 ```sh
 git clone https://github.com/Ohanronnie/typenative-ui.git

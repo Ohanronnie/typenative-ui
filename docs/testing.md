@@ -36,6 +36,11 @@ TYPE_NATIVE_COMPILER_ROOT=/path/to/typenative \
   scripts/run-tests.sh /path/to/typenative/target/release/tn
 ```
 
+CI also runs `scripts/verify-clean-clone.sh` against the pushed `main` branch.
+It clones the public framework repository into a temporary directory and runs
+formatting, checking, and linting there before the workload and sanitizer
+matrix begins.
+
 The script performs these stages:
 
 1. TypeNative formatting, checking, linting, and compiler-boundary validation.
