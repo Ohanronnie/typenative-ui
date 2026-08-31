@@ -30,6 +30,8 @@ extern struct NativeRange {
 declare extern "C" {
   function NSApplicationLoad(): bool;
   function pthread_main_np(): i32;
+  function objc_autoreleasePoolPush(): *mut u8;
+  function objc_autoreleasePoolPop(pool: *mut u8): void;
   function objc_getClass(name: *const u8): *mut u8;
   function sel_registerName(name: *const u8): *mut u8;
   function objc_msgSend(receiver: *mut u8, selector: *mut u8, argument: *mut u8): *mut u8;
@@ -96,6 +98,25 @@ declare extern "C" {
 function nullRaw(): *mut u8 {
   unsafe {
     return nullPointer<u8>();
+  }
+}
+class AutoreleasePool implements Disposable {
+  private pointer: *mut u8;
+  public constructor() {
+    unsafe {
+      this.pointer = objc_autoreleasePoolPush();
+    }
+  }
+  public dispose(): void {
+    unsafe {
+      if (this.pointer !== nullPointer<u8>()) {
+        objc_autoreleasePoolPop(this.pointer);
+        this.pointer = nullPointer<u8>();
+      }
+    }
+  }
+  [Symbol.dispose](): void {
+    this.dispose();
   }
 }
 function monotonicTimestampNanoseconds(): u64 {
@@ -2030,6 +2051,7 @@ export class NativeRenderer implements Disposable {
     this.mounted = false;
   }
   public mount(root: Element): bool {
+    using pool = new AutoreleasePool();
     if (!this.start() || !this.onUIThread()) {
       return false;
     }
@@ -2106,6 +2128,7 @@ export class NativeRenderer implements Disposable {
     this.drainScheduler();
   }
   private runScheduledFrame(): void {
+    using pool = new AutoreleasePool();
     this.frameJob = undefined;
     this.frameQueued = false;
     if (!this.mounted || !this.animator.hasRunning()) {
@@ -2183,6 +2206,7 @@ export class NativeRenderer implements Disposable {
     this.drainScheduler();
   }
   public rerender(): void {
+    using pool = new AutoreleasePool();
     if (!this.mounted || this.factory === undefined || this.updating) {
       return;
     }
@@ -2197,6 +2221,7 @@ export class NativeRenderer implements Disposable {
     }
   }
   public update(root: Element): bool {
+    using pool = new AutoreleasePool();
     if (!this.mounted || !this.onUIThread()) {
       return false;
     }
@@ -2528,6 +2553,7 @@ export class NativeRenderer implements Disposable {
     return this.reconciler.rootElement();
   }
   public close(): void {
+    using pool = new AutoreleasePool();
     if (this.started && !this.onUIThread()) {
       return;
     }
@@ -2645,6 +2671,7 @@ function dispatchNativeScrollChange(rendererPointer: *mut u8, identity: u64, scr
   }
 }
 function nativeTargetCallback(receiver: *mut u8, selector: *mut u8, argument: *mut u8): void {
+  using pool = new AutoreleasePool();
   if (receiver === nullRaw()) {
     return;
   }
@@ -2718,6 +2745,7 @@ function nativeTargetCallback(receiver: *mut u8, selector: *mut u8, argument: *m
   }
 }
 function nativeWindowShouldClose(receiver: *mut u8, selector: *mut u8, argument: *mut u8): bool {
+  using pool = new AutoreleasePool();
   if (receiver === nullRaw()) {
     return true;
   }
