@@ -96,6 +96,7 @@ build_and_run renderer-smoke testing/renderer-smoke/typenative.json debug addres
 build_and_run button testing/button/typenative.json debug address
 build_and_run headless-events testing/headless-events/typenative.json debug address
 build_and_run hooks-integration testing/hooks-integration/typenative.json debug address
+build_and_run hook-order testing/hook-order/typenative.json debug address
 build_and_run refs testing/refs/typenative.json debug address
 build_and_run component-identity testing/component-identity/typenative.json debug address
 build_and_run lifecycle testing/lifecycle/typenative.json debug address
@@ -116,6 +117,7 @@ build_and_run renderer-smoke testing/renderer-smoke/typenative.json optimized no
 build_and_run button testing/button/typenative.json optimized none
 build_and_run headless-events testing/headless-events/typenative.json optimized none
 build_and_run hooks-integration testing/hooks-integration/typenative.json optimized none
+build_and_run hook-order testing/hook-order/typenative.json optimized none
 build_and_run refs testing/refs/typenative.json optimized none
 build_and_run component-identity testing/component-identity/typenative.json optimized none
 build_and_run lifecycle testing/lifecycle/typenative.json optimized none

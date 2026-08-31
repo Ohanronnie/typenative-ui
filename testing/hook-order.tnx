@@ -1,0 +1,38 @@
+import { Text } from "../src/components";
+import { EmptyProps } from "../src/core/types";
+import { useState } from "../src/hooks/hooks";
+import { HeadlessRenderer } from "../src/renderer/headless";
+import { Element } from "../src/tnx-runtime";
+
+static mut includeState: bool = false;
+function Conditional(props: EmptyProps): Element {
+  let stateEnabled = false;
+  unsafe {
+    stateEnabled = includeState;
+  }
+  if (stateEnabled) {
+    const [value, setValue] = useState<i32>(0i32);
+    value;
+    setValue;
+  }
+  return <Text>ready</Text>;
+}
+function main(): i32 {
+  using renderer = new HeadlessRenderer();
+  renderer.mount(<Conditional />);
+  unsafe {
+    includeState = true;
+  }
+  renderer.update(<Conditional />);
+  if (!renderer.hasDiagnostics()) {
+    return 1;
+  }
+  const diagnostic = renderer.hookOrderDiagnosticAt(0usize);
+  if (diagnostic === undefined) {
+    return 2;
+  }
+  if (diagnostic!.componentType === 0u64 || diagnostic!.instanceId === 0u64 || diagnostic!.expectedHooks !== 0usize || diagnostic!.actualHooks !== 1usize || diagnostic!.hookIndex !== 0usize) {
+    return 3;
+  }
+  return 0;
+}

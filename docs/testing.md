@@ -12,6 +12,7 @@ entry path, target, JSX runtime, and external libraries are explicit.
 | `testing/button/typenative.json` | JSX button children and action dispatch                                   |
 | `testing/headless-events`        | Headless mount, accessibility, focus, input, update, and unmount          |
 | `testing/hooks-integration`      | State, reducer, context, ref, ID, memo, callback, effects, and batching   |
+| `testing/hook-order`             | Structured diagnostics for changing hook order                          |
 | `testing/component-identity`     | Callable identity, keyed state retention, replacement, and key reset      |
 | `testing/refs`                   | Host reference attach/current/detach lifecycle                            |
 | `testing/lifecycle`              | Deep disposal, repeated mount/unmount, and effect cleanup                 |

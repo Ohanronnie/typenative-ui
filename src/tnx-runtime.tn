@@ -223,6 +223,9 @@ export struct ComponentId {
   public equals(other: &ComponentId): bool {
     return this.identity === other.identity;
   }
+  public identityValue(): u64 {
+    return this.identity;
+  }
 }
 export function defaultStyleSnapshot(): StyleSnapshot {
   return {

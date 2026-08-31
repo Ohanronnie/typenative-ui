@@ -1,7 +1,7 @@
 import { u64ToUsize, usizeToU64 } from "std/alloc";
 import { Array } from "std/collections";
 import { Disposable } from "std/core";
-import { beginBatchFor, beginComponent, beginHookPassFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor } from "../hooks/hooks";
+import { beginBatchFor, beginComponent, beginHookPassFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookOrderDiagnostic, HookRoot, setUpdateCallbackFor } from "../hooks/hooks";
 import { accessibilityRoleCode, alignCode, displayCode, Element, flexDirectionCode, hostChildAt, hostChildCount, hostSetChild, justifyCode, Key, kindFunction, kindImage, kindProgress, kindSlider, kindSwitch, kindTextInput, leaf, lengthEquals, overflowCode, positionTypeCode, StyleSnapshot } from "../tnx-runtime";
 import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "./mutations";
 
@@ -816,6 +816,9 @@ export class Reconciler implements Disposable {
   }
   public hasDiagnostics(): bool {
     return this.duplicateKeyErrors.length !== 0usize || this.hooks.hookOrderErrorCount() !== 0usize;
+  }
+  public hookOrderDiagnosticAt(index: usize): HookOrderDiagnostic | undefined {
+    return this.hooks.hookOrderDiagnosticAt(index);
   }
   public beginBatch(): void {
     beginBatchFor( &mut this.hooks);

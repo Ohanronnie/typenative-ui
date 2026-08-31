@@ -7,6 +7,15 @@ import { ComponentId, Key } from "../tnx-runtime";
 export type StateSetter<T > =(T) => void;
 export type Cleanup =() => void;
 export type EffectCallback =() => Cleanup;
+export struct HookOrderDiagnostic {
+  public componentType: u64;
+  public instanceId: u64;
+  public expectedHooks: usize;
+  public actualHooks: usize;
+  public hookIndex: usize;
+  public expectedKind: i32;
+  public actualKind: i32;
+}
 const hookState: i32 = 1;
 const hookReducer: i32 = 2;
 const hookEffect: i32 = 3;
@@ -298,6 +307,11 @@ struct ComponentInstance {
   private cursor: usize;
   private expectedCount: usize;
   private hasExpectedCount: bool;
+  private diagnosticHookIndex: usize;
+  private diagnosticExpectedHooks: usize;
+  private diagnosticActualHooks: usize;
+  private diagnosticExpectedKind: i32;
+  private diagnosticActualKind: i32;
   private seenGeneration: u64;
   private children: Array<usize>;
   public matches(identity: &ComponentId, key: &Key, parentIndex: usize | undefined, parentInstanceId: u64, position: usize): bool {
@@ -323,6 +337,11 @@ struct ComponentInstance {
     this.cursor = 0usize;
     this.expectedCount = 0usize;
     this.hasExpectedCount = false;
+    this.diagnosticHookIndex = 0usize;
+    this.diagnosticExpectedHooks = 0usize;
+    this.diagnosticActualHooks = 0usize;
+    this.diagnosticExpectedKind = 0i32;
+    this.diagnosticActualKind = 0i32;
     this.seenGeneration = generation;
   }
   public seen(generation: u64): void {
@@ -369,8 +388,18 @@ struct ComponentInstance {
   public hasHookOrderError(): bool {
     return this.hookOrderError;
   }
+  public diagnostic(): HookOrderDiagnostic {
+    return {
+      componentType: this.identity.identityValue(), instanceId: this.instanceId, expectedHooks: this.diagnosticExpectedHooks, actualHooks: this.diagnosticActualHooks, hookIndex: this.diagnosticHookIndex, expectedKind: this.diagnosticExpectedKind, actualKind: this.diagnosticActualKind,
+    };
+  }
   public begin(): void {
     this.cursor = 0usize;
+    this.diagnosticHookIndex = 0usize;
+    this.diagnosticExpectedHooks = 0usize;
+    this.diagnosticActualHooks = 0usize;
+    this.diagnosticExpectedKind = 0i32;
+    this.diagnosticActualKind = 0i32;
   }
   public next(kind: i32, generation: u64): usize {
     const index = this.cursor;
@@ -384,6 +413,11 @@ struct ComponentInstance {
           cell!.seen(generation);
         } else {
           this.hookOrderError = true;
+          this.diagnosticExpectedHooks = this.hasExpectedCount?this.expectedCount: 0usize;
+          this.diagnosticActualHooks = index + 1usize;
+          this.diagnosticHookIndex = index;
+          this.diagnosticExpectedKind = cell!.kindCode();
+          this.diagnosticActualKind = kind;
           cell!.dispose();
           cell!.setKind(kind);
           cell!.seen(generation);
@@ -395,6 +429,11 @@ struct ComponentInstance {
   public finish(): void {
     if (this.hasExpectedCount && this.expectedCount !== this.cursor) {
       this.hookOrderError = true;
+      this.diagnosticExpectedHooks = this.expectedCount;
+      this.diagnosticActualHooks = this.cursor;
+      if (this.diagnosticExpectedKind === 0i32 && this.diagnosticActualKind === 0i32) {
+        this.diagnosticHookIndex = this.expectedCount;
+      }
     }
     this.expectedCount = this.cursor;
     this.hasExpectedCount = true;
@@ -432,7 +471,7 @@ function newComponentInstance(identity: ComponentId, key: Key, parentIndex: usiz
   return {
     identity: move identity, key: move key, parentIndex: parentIndex, parentInstanceId: parentInstanceId, position: position, instanceId: instanceId, active: true, hookOrderError: false, cells: new Array<HookCell>({
       capacity: 0usize
-    }), cursor: 0usize, expectedCount: 0usize, hasExpectedCount: false, seenGeneration: generation, children: new Array<usize>({
+    }), cursor: 0usize, expectedCount: 0usize, hasExpectedCount: false, diagnosticHookIndex: 0usize, diagnosticExpectedHooks: 0usize, diagnosticActualHooks: 0usize, diagnosticExpectedKind: 0i32, diagnosticActualKind: 0i32, seenGeneration: generation, children: new Array<usize>({
       capacity: 0usize
     }),
   };
@@ -448,6 +487,7 @@ export class HookRoot implements Disposable {
   private rendering: bool;
   private alive: bool;
   private hookOrderErrors: usize;
+  private hookOrderDiagnostics: Array<HookOrderDiagnostic>;
   public transitionDepth: i32;
   private invalidCell: HookCell;
   private previousContexts: Array< *mut u8>;
@@ -466,6 +506,9 @@ export class HookRoot implements Disposable {
     this.rendering = false;
     this.alive = true;
     this.hookOrderErrors = 0usize;
+    this.hookOrderDiagnostics = new Array<HookOrderDiagnostic>({
+      capacity: 0usize
+    });
     this.transitionDepth = 0i32;
     this.invalidCell = newHookCell(0i32, 0u64);
     this.previousContexts = new Array< *mut u8>({
@@ -475,6 +518,8 @@ export class HookRoot implements Disposable {
   public startPass(): void {
     this.generation = this.generation + 1u64;
     this.activeComponents.clear();
+    this.hookOrderErrors = 0usize;
+    this.hookOrderDiagnostics.clear();
     this.rendering = true;
     this.alive = true;
   }
@@ -561,6 +606,7 @@ export class HookRoot implements Disposable {
       component!.finish();
       if (component!.hasHookOrderError()) {
         this.hookOrderErrors = this.hookOrderErrors + 1usize;
+        this.hookOrderDiagnostics.push(component!.diagnostic());
       }
     }
   }
@@ -776,6 +822,7 @@ export class HookRoot implements Disposable {
     this.rendering = false;
     this.alive = false;
     this.hookOrderErrors = 0usize;
+    this.hookOrderDiagnostics.clear();
     this.transitionDepth = 0i32;
     this.invalidCell.dispose();
     this.invalidCell = newHookCell(0i32, 0u64);
@@ -794,6 +841,15 @@ export class HookRoot implements Disposable {
   }
   public hookOrderErrorCount(): usize {
     return this.hookOrderErrors;
+  }
+  public hookOrderDiagnosticAt(index: usize): HookOrderDiagnostic | undefined {
+    const diagnostic = this.hookOrderDiagnostics.at(index);
+    if (diagnostic === undefined) {
+      return undefined;
+    }
+    return {
+      componentType: diagnostic!.componentType, instanceId: diagnostic!.instanceId, expectedHooks: diagnostic!.expectedHooks, actualHooks: diagnostic!.actualHooks, hookIndex: diagnostic!.hookIndex, expectedKind: diagnostic!.expectedKind, actualKind: diagnostic!.actualKind,
+    };
   }
   public beginTransition(): void {
     this.transitionDepth = this.transitionDepth + 1i32;

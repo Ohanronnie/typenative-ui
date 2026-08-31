@@ -1,4 +1,5 @@
 import { Disposable } from "std/core";
+import { HookOrderDiagnostic } from "../hooks/hooks";
 import { DuplicateKeyDiagnostic, Reconciler } from "../reconciler/reconciler";
 import { AccessibilityRole, Element, accessibilityRoleCode, dispatchPress, hostChildAt, isFocused } from "../tnx-runtime";
 
@@ -126,6 +127,9 @@ export class HeadlessRenderer implements Disposable {
   }
   public hasDiagnostics(): bool {
     return this.reconciler.hasDiagnostics();
+  }
+  public hookOrderDiagnosticAt(index: usize): HookOrderDiagnostic | undefined {
+    return this.reconciler.hookOrderDiagnosticAt(index);
   }
   public setUpdateCallback(callback: () => void): void {
     this.reconciler.setUpdateCallback(move callback);
