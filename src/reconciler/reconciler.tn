@@ -1,7 +1,7 @@
 import { Array } from "std/collections";
 import { Disposable } from "std/core";
 import { beginBatchFor, beginComponent, beginHookPassFor, clearHooksFor, clearUpdateCallbackFor, endBatchFor, endComponent, finishHookPassFor, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor } from "../hooks/hooks";
-import { accessibilityRoleCode, alignCode, displayCode, Element, flexDirectionCode, hostChildAt, hostChildCount, hostSetChild, justifyCode, kindFunction, kindImage, kindProgress, kindSlider, kindSwitch, kindTextInput, leaf, lengthEquals, overflowCode, positionTypeCode, StyleSnapshot } from "../tnx-runtime";
+import { accessibilityRoleCode, alignCode, displayCode, Element, flexDirectionCode, hostChildAt, hostChildCount, hostSetChild, justifyCode, Key, kindFunction, kindImage, kindProgress, kindSlider, kindSwitch, kindTextInput, leaf, lengthEquals, overflowCode, positionTypeCode, StyleSnapshot } from "../tnx-runtime";
 import { Mutation, mutationCreate, mutationInsert, mutationMove, mutationRemove, mutationReplace, mutationUpdate } from "./mutations";
 
 struct MountedNode {
@@ -12,6 +12,12 @@ struct MountedNode {
   public kind: i32;
   public typeId: u64;
   public children: Array<i32>;
+}
+export struct DuplicateKeyDiagnostic {
+  public parentIdentity: u64;
+  public key: Key;
+  public firstIndex: usize;
+  public duplicateIndex: usize;
 }
 function parentNode(id: i32): i32 | undefined {
   return id;
@@ -150,8 +156,7 @@ function clearFocusedInTree(element: &Element): void {
     index = index + 1usize;
   }
 }
-function duplicateKeyCountInTree(element: &Element): usize {
-  let count: usize = 0;
+function collectDuplicateKeys(element: &Element, diagnostics: &mut Array<DuplicateKeyDiagnostic >): void {
   let left: usize = 0;
   while (left<hostChildCount(element)) {
     const leftChild = hostChildAt(element, left);
@@ -160,8 +165,9 @@ function duplicateKeyCountInTree(element: &Element): usize {
       while (right<hostChildCount(element)) {
         const rightChild = hostChildAt(element, right);
         if (rightChild !== undefined && rightChild!.keyIsPresent() && leftChild!.keyEquals(rightChild!)) {
-          count = count + 1usize;
-          break;
+          diagnostics.push({
+            parentIdentity: element.mountedIdentity(), key: rightChild!.key(), firstIndex: left, duplicateIndex: right,
+          });
         }
         right = right + 1usize;
       }
@@ -172,11 +178,10 @@ function duplicateKeyCountInTree(element: &Element): usize {
   while (childIndex<hostChildCount(element)) {
     const child = hostChildAt(element, childIndex);
     if (child !== undefined) {
-      count = count + duplicateKeyCountInTree(child!);
+      collectDuplicateKeys(child!, diagnostics);
     }
     childIndex = childIndex + 1usize;
   }
-  return count;
 }
 function firstIdentityOfKind(element: &Element, kind: i32): u64 | undefined {
   if (element.kind() === kind) {
@@ -268,7 +273,7 @@ export class Reconciler implements Disposable {
   private mutations: Array<Mutation>;
   private hooks: HookRoot;
   private focusedIdentity: u64 | undefined;
-  private duplicateKeyErrors: usize;
+  private duplicateKeyErrors: Array<DuplicateKeyDiagnostic>;
   public constructor() {
     this.root = leaf();
     this.mounted = false;
@@ -283,7 +288,9 @@ export class Reconciler implements Disposable {
     });
     this.hooks = new HookRoot();
     this.focusedIdentity = undefined;
-    this.duplicateKeyErrors = 0usize;
+    this.duplicateKeyErrors = new Array<DuplicateKeyDiagnostic>({
+      capacity: 0usize
+    });
   }
   private allocateNode(element: &Element): i32 {
     let index: usize = 0;
@@ -481,9 +488,9 @@ export class Reconciler implements Disposable {
     this.treeGeneration = this.treeGeneration + 1u64;
     const rendered = this.render(move element);
     this.root = move rendered;
-    this.duplicateKeyErrors = duplicateKeyCountInTree( &this.root);
     this.mounted = true;
     this.snapshot( &this.root, undefined, 0usize, true);
+    collectDuplicateKeys( &this.root, &mut this.duplicateKeyErrors);
     flushLayoutEffectsFor( &mut this.hooks);
     flushPassiveEffectsFor( &mut this.hooks);
   }
@@ -495,9 +502,10 @@ export class Reconciler implements Disposable {
     this.treeGeneration = this.treeGeneration + 1u64;
     const next = this.render(move input);
     this.mutations.clear();
-    this.duplicateKeyErrors = duplicateKeyCountInTree( &next);
+    this.duplicateKeyErrors.clear();
     this.diffNode( &this.root, &next, 0i32, undefined, 0usize);
     this.root = move next;
+    collectDuplicateKeys( &this.root, &mut this.duplicateKeyErrors);
     if (this.focusedIdentity !== undefined && !setFocusedInTree( &this.root, this.focusedIdentity!)) {
       this.focusedIdentity = undefined;
     }
@@ -514,6 +522,7 @@ export class Reconciler implements Disposable {
     this.mounted = false;
     this.nodes.clear();
     this.mutations.clear();
+    this.duplicateKeyErrors.clear();
     this.nextId = 0i32;
     clearHooksFor( &mut this.hooks);
   }
@@ -639,10 +648,21 @@ export class Reconciler implements Disposable {
     return this.focusedIdentity;
   }
   public duplicateKeyCount(): usize {
-    return this.duplicateKeyErrors;
+    return this.duplicateKeyErrors.length;
+  }
+  public duplicateKeyAt(index: usize): DuplicateKeyDiagnostic | undefined {
+    const diagnostic = this.duplicateKeyErrors.at(index);
+    if (diagnostic === undefined) {
+      return undefined;
+    }
+    return {
+      parentIdentity: diagnostic!.parentIdentity, key: {
+        kind: diagnostic!.key.kind, text: diagnostic!.key.text.clone(), integer: diagnostic!.key.integer, identity: diagnostic!.key.identity,
+      }, firstIndex: diagnostic!.firstIndex, duplicateIndex: diagnostic!.duplicateIndex,
+    };
   }
   public hasDiagnostics(): bool {
-    return this.duplicateKeyErrors !== 0usize || this.hooks.hookOrderErrorCount() !== 0usize;
+    return this.duplicateKeyErrors.length !== 0usize || this.hooks.hookOrderErrorCount() !== 0usize;
   }
   public beginBatch(): void {
     beginBatchFor( &mut this.hooks);

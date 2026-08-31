@@ -1,5 +1,5 @@
 import { Disposable } from "std/core";
-import { Reconciler } from "../reconciler/reconciler";
+import { DuplicateKeyDiagnostic, Reconciler } from "../reconciler/reconciler";
 import { AccessibilityRole, Element, accessibilityRoleCode, dispatchPress, hostChildAt, isFocused } from "../tnx-runtime";
 
 export class HeadlessRenderer implements Disposable {
@@ -120,6 +120,9 @@ export class HeadlessRenderer implements Disposable {
   }
   public duplicateKeyCount(): usize {
     return this.reconciler.duplicateKeyCount();
+  }
+  public duplicateKeyAt(index: usize): DuplicateKeyDiagnostic | undefined {
+    return this.reconciler.duplicateKeyAt(index);
   }
   public hasDiagnostics(): bool {
     return this.reconciler.hasDiagnostics();

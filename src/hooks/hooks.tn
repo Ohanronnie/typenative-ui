@@ -285,9 +285,10 @@ function newHookCell(kind: i32, generation: u64): HookCell {
     }), pending: false, effect: noopEffect, hasEffect: false, cleanup: noop, hasCleanup: false, deferredValue: nullRaw(), deferredDropper: undefined, seenGeneration: generation,
   };
 }
-struct HookComponent {
+struct ComponentInstance {
   private identity: ComponentId;
   private key: Key;
+  private parentIndex: usize | undefined;
   private parentInstanceId: u64;
   private position: usize;
   private instanceId: u64;
@@ -298,8 +299,9 @@ struct HookComponent {
   private expectedCount: usize;
   private hasExpectedCount: bool;
   private seenGeneration: u64;
-  public matches(identity: &ComponentId, key: &Key, parentInstanceId: u64, position: usize): bool {
-    if (!this.active || this.parentInstanceId !== parentInstanceId || !this.identity.equals(identity)) {
+  private children: Array<usize>;
+  public matches(identity: &ComponentId, key: &Key, parentIndex: usize | undefined, parentInstanceId: u64, position: usize): bool {
+    if (!this.active || this.parentIndex !== parentIndex || this.parentInstanceId !== parentInstanceId || !this.identity.equals(identity)) {
       return false;
     }
     if (!sameKey( &this.key, key)) {
@@ -307,10 +309,12 @@ struct HookComponent {
     }
     return key.kind !== 0i32 || this.position === position;
   }
-  public activate(identity: ComponentId, key: Key, parentInstanceId: u64, position: usize, instanceId: u64, generation: u64): void {
+  public activate(identity: ComponentId, key: Key, parentIndex: usize | undefined, parentInstanceId: u64, position: usize, instanceId: u64, generation: u64): void {
     this.disposeCells();
+    this.children.clear();
     this.identity = move identity;
     this.key = move key;
+    this.parentIndex = parentIndex;
     this.parentInstanceId = parentInstanceId;
     this.position = position;
     this.instanceId = instanceId;
@@ -332,6 +336,35 @@ struct HookComponent {
   }
   public instance(): u64 {
     return this.instanceId;
+  }
+  public parent(): usize | undefined {
+    return this.parentIndex;
+  }
+  public childCount(): usize {
+    return this.children.length;
+  }
+  public childAt(index: usize): usize | undefined {
+    const child = this.children.at(index);
+    if (child === undefined) {
+      return undefined;
+    }
+    unsafe {
+      return *(child!);
+    }
+  }
+  public addChild(index: usize): void {
+    this.children.push(index);
+  }
+  public removeChild(index: usize): void {
+    let childIndex: usize = 0;
+    while (childIndex<this.children.length) {
+      const child = this.childAt(childIndex);
+      if (child !== undefined && child! === index) {
+        this.children.removeAt(childIndex);
+        return;
+      }
+      childIndex = childIndex + 1usize;
+    }
   }
   public hasHookOrderError(): bool {
     return this.hookOrderError;
@@ -380,6 +413,7 @@ struct HookComponent {
   }
   public dispose(): void {
     this.active = false;
+    this.children.clear();
     this.disposeCells();
   }
   private disposeCells(): void {
@@ -394,15 +428,17 @@ struct HookComponent {
     this.cells.clear();
   }
 }
-function newHookComponent(identity: ComponentId, key: Key, parentInstanceId: u64, position: usize, instanceId: u64, generation: u64): HookComponent {
+function newComponentInstance(identity: ComponentId, key: Key, parentIndex: usize | undefined, parentInstanceId: u64, position: usize, instanceId: u64, generation: u64): ComponentInstance {
   return {
-    identity: move identity, key: move key, parentInstanceId: parentInstanceId, position: position, instanceId: instanceId, active: true, hookOrderError: false, cells: new Array<HookCell>({
-      capacity: 4usize
-    }), cursor: 0usize, expectedCount: 0usize, hasExpectedCount: false, seenGeneration: generation,
+    identity: move identity, key: move key, parentIndex: parentIndex, parentInstanceId: parentInstanceId, position: position, instanceId: instanceId, active: true, hookOrderError: false, cells: new Array<HookCell>({
+      capacity: 0usize
+    }), cursor: 0usize, expectedCount: 0usize, hasExpectedCount: false, seenGeneration: generation, children: new Array<usize>({
+      capacity: 0usize
+    }),
   };
 }
 export class HookRoot implements Disposable {
-  private components: Array<HookComponent>;
+  private components: Array<ComponentInstance>;
   private activeComponents: Array<usize>;
   private generation: u64;
   private updatePending: bool;
@@ -416,8 +452,8 @@ export class HookRoot implements Disposable {
   private invalidCell: HookCell;
   private previousContexts: Array< *mut u8>;
   public constructor() {
-    this.components = new Array<HookComponent>({
-      capacity: 8usize
+    this.components = new Array<ComponentInstance>({
+      capacity: 0usize
     });
     this.activeComponents = new Array<usize>({
       capacity: 0usize
@@ -443,47 +479,73 @@ export class HookRoot implements Disposable {
     this.alive = true;
   }
   public findOrCreate(identity: ComponentId, key: Key, position: usize): void {
+    let parentIndex: usize | undefined = undefined;
     let parentInstanceId = 0u64;
     if (this.activeComponents.length > 0usize) {
       const active = this.activeComponents.at(this.activeComponents.length - 1usize);
       if (active !== undefined) {
-        let parentIndex = 0usize;
         unsafe {
           parentIndex = *(active!);
         }
-        const parent = this.components.at(parentIndex);
+        const parent = this.components.at(parentIndex!);
         if (parent !== undefined) {
           parentInstanceId = parent!.instance();
         }
       }
     }
-    let index: usize = 0;
-    while (index<this.components.length) {
-      const component = this.components.atMut(index);
-      if (component !== undefined && component!.matches( &identity, &key, parentInstanceId, position)) {
-        component!.seen(this.generation);
-        component!.begin();
-        this.activeComponents.push(index);
-        return;
+    // Search only the current instance's direct children. This is the
+    // component path that defines identity; a same-key component elsewhere in
+    // the tree must never steal another component's state.
+    if (parentIndex !== undefined) {
+      const parent = this.components.at(parentIndex!);
+      if (parent !== undefined) {
+        let childIndex: usize = 0;
+        while (childIndex<parent!.childCount()) {
+          const candidateIndex = parent!.childAt(childIndex);
+          if (candidateIndex !== undefined) {
+            const candidate = this.components.atMut(candidateIndex!);
+            if (candidate !== undefined && candidate!.matches( &identity, &key, parentIndex, parentInstanceId, position)) {
+              candidate!.seen(this.generation);
+              candidate!.begin();
+              this.activeComponents.push(candidateIndex!);
+              return;
+            }
+          }
+          childIndex = childIndex + 1usize;
+        }
       }
-      index = index + 1usize;
+    } else {
+      let rootIndex: usize = 0;
+      while (rootIndex<this.components.length) {
+        const component = this.components.atMut(rootIndex);
+        if (component !== undefined && component!.matches( &identity, &key, undefined, 0u64, position)) {
+          component!.seen(this.generation);
+          component!.begin();
+          this.activeComponents.push(rootIndex);
+          return;
+        }
+        rootIndex = rootIndex + 1usize;
+      }
     }
-    index = 0usize;
+    let index: usize = 0;
     while (index<this.components.length) {
       const component = this.components.atMut(index);
       if (component !== undefined && !component!.isActive()) {
         const instanceId = this.nextId();
-        component!.activate(move identity, move key, parentInstanceId, position, instanceId, this.generation);
+        component!.activate(move identity, move key, parentIndex, parentInstanceId, position, instanceId, this.generation);
         component!.begin();
+        this.attachChild(parentIndex, index);
         this.activeComponents.push(index);
         return;
       }
       index = index + 1usize;
     }
     const instanceId = this.nextId();
-    this.components.push(newHookComponent(move identity, move key, parentInstanceId, position, instanceId, this.generation));
-    this.activeComponents.push(this.components.length - 1usize);
-    const created = this.components.atMut(this.components.length - 1usize);
+    this.components.push(newComponentInstance(move identity, move key, parentIndex, parentInstanceId, position, instanceId, this.generation));
+    const createdIndex = this.components.length - 1usize;
+    this.attachChild(parentIndex, createdIndex);
+    this.activeComponents.push(createdIndex);
+    const created = this.components.atMut(createdIndex);
     if (created !== undefined) {
       created!.begin();
     }
@@ -577,9 +639,44 @@ export class HookRoot implements Disposable {
     while (index<this.components.length) {
       const component = this.components.at(index);
       if (component !== undefined && component!.isActive() && !component!.isSeen(this.generation)) {
-        component!.dispose();
+        this.disposeComponent(index);
       }
       index = index + 1usize;
+    }
+  }
+  private disposeComponent(index: usize): void {
+    const component = this.components.at(index);
+    if (component === undefined || !component!.isActive()) {
+      return;
+    }
+    let childIndex: usize = 0;
+    while (childIndex<component!.childCount()) {
+      const child = component!.childAt(childIndex);
+      if (child !== undefined) {
+        this.disposeComponent(child!);
+      }
+      childIndex = childIndex + 1usize;
+    }
+    const mutable = this.components.atMut(index);
+    if (mutable !== undefined) {
+      mutable!.dispose();
+    }
+  }
+  private attachChild(parentIndex: usize | undefined, childIndex: usize): void {
+    if (parentIndex === undefined) {
+      return;
+    }
+    const parent = this.components.atMut(parentIndex!);
+    if (parent !== undefined) {
+      let index: usize = 0;
+      while (index<parent!.childCount()) {
+        const child = parent!.childAt(index);
+        if (child !== undefined && child! === childIndex) {
+          return;
+        }
+        index = index + 1usize;
+      }
+      parent!.addChild(childIndex);
     }
   }
   public setUpdateCallback(callback: () => void): void {

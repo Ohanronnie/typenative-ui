@@ -8,7 +8,7 @@ object model behind the public API.
 
 | Layer                          | Responsibility                                                                                        |
 | ------------------------------ | ----------------------------------------------------------------------------------------------------- |
-| `src/tnx-runtime.tn`           | Element records, JSX construction, component slots, host children, text, styles, refs, and disposal   |
+| `src/tnx-runtime.tn`           | Element records, JSX construction, component metadata, host children, text, styles, refs, and disposal |
 | `src/components.tn`            | Typed `View`, `Text`, `Button`, and `Window` constructors plus direct tree helpers                    |
 | `src/hooks/hooks.tn`           | State, reducers, effects, memoization, callbacks, refs, context, IDs, batching, and hook-shape checks |
 | `src/reconciler/reconciler.tn` | Component resolution, keyed child matching, mutation recording, and root ownership                    |
@@ -39,13 +39,13 @@ is part of the reconciliation update test.
 ## Reconciliation
 
 `renderTree` resolves functional components recursively. Each component enters
-the hook store with its `(source, key)` identity and a zero-based hook cursor.
-`finishHookPass` removes slots that were not seen and validates both hook count
-and hook kind stability.
+a root-owned instance tree with its `(parent, source, key, position)` identity
+and a zero-based hook cursor. `finishHookPass` removes instances that were not
+seen and validates both hook count and hook kind stability.
 
 `Reconciler` retains the resolved root. On update it compares node kind, type,
-key, text hash/length, and style revision. Keyed children are indexed with an
-open-addressed table; the diff emits `create`, `insert`, `move`, `update`,
+key, text, and style values. Keyed children are matched using actual key
+equality; duplicate keys are retained as structured diagnostics. The diff emits `create`, `insert`, `move`, `update`,
 `remove`, and `replace` records. The headless backend exposes these records so
 tests can assert that an unchanged tree emits zero work and that a reversal
 emits moves rather than replacements.
@@ -58,8 +58,8 @@ and the native ownership rules auditable.
 
 ## Hooks and events
 
-Hooks are owned by each `HookRoot` and keyed by component source, key, hook
-index, and hook kind. `useState` and reducers expose pointer-backed state
+Hooks are owned by each `HookRoot` and keyed by component parent, source, key,
+position, hook index, and hook kind. `useState` and reducers expose typed state
 handles; state changes mark an update pending. `batch` coalesces multiple
 changes into a single update notification. `useLayoutEffect` flushes before
 passive effects, and replacement/unmount runs the prior cleanup before

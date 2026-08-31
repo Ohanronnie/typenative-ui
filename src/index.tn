@@ -6,7 +6,7 @@ import { Button as NativeButton, Canvas as NativeCanvas, Dialog as NativeDialog,
 import { AccessibilityRole as CoreAccessibilityRole, Align as CoreAlign, auto as coreAuto, ButtonProps as CoreButtonProps, CanvasProps as CoreCanvasProps, DialogProps as CoreDialogProps, Display as CoreDisplay, FlexDirection as CoreFlexDirection, GridProps as CoreGridProps, ImageProps as CoreImageProps, Justify as CoreJustify, KeyboardType as CoreKeyboardType, Length as CoreLength, ListProps as CoreListProps, MenuProps as CoreMenuProps, Overflow as CoreOverflow, percent as corePercent, points as corePoints, PositionType as CorePositionType, ProgressProps as CoreProgressProps, ScrollViewProps as CoreScrollViewProps, SliderProps as CoreSliderProps, SplitViewProps as CoreSplitViewProps, StackProps as CoreStackProps, Style as CoreStyle, SwitchProps as CoreSwitchProps, TextInputProps as CoreTextInputProps, TextProps as CoreTextProps, TextSelection as CoreTextSelection, ToolbarProps as CoreToolbarProps, ViewProps as CoreViewProps, WindowClosePolicy as CoreWindowClosePolicy, WindowProps as CoreWindowProps } from "./core/types";
 import { batch as hookBatch, Context as HookContext, Cleanup, flushLayoutEffectsFor, flushPassiveEffectsFor, HookRoot, setUpdateCallbackFor, useCallback as hookUseCallback, useContext as hookUseContext, useDeferredValue as hookUseDeferredValue, useEffect as hookUseEffect, useId as hookUseId, useLayoutEffect as hookUseLayoutEffect, useMemo as hookUseMemo, useReducer as hookUseReducer, useRef as hookUseRef, useState as hookUseState, useSyncExternalStore as hookUseSyncExternalStore, useTransition as hookUseTransition, StatePair as HookStatePair, ReducerPair as HookReducerPair, Ref as HookRef, Transition as HookTransition } from "./hooks/hooks";
 import { NativeRenderer as RuntimeNativeRenderer, createNativeRenderer as runtimeCreateNativeRenderer, runApp as runtimeRunApp } from "./platform/macos";
-import { Reconciler as RuntimeReconciler } from "./reconciler/reconciler";
+import { DuplicateKeyDiagnostic as RuntimeDuplicateKeyDiagnostic, Reconciler as RuntimeReconciler } from "./reconciler/reconciler";
 import { HeadlessRenderer as RuntimeHeadlessRenderer } from "./renderer/headless";
 import { Scheduler as RuntimeScheduler, UiScheduler as RuntimeUiScheduler } from "./scheduler/scheduler";
 import { Element as RuntimeElement, ElementChild as RuntimeElementChild, ElementRef as RuntimeElementRef, Key as RuntimeKey, createElementRef as runtimeCreateElementRef } from "./tnx-runtime";
@@ -73,6 +73,7 @@ export type ComponentType<Props > =(Props) => Element;
 export type HostComponent<Props > =(Props) => Element;
 export type Context<T > = HookContext<T>;
 export type Reconciler = RuntimeReconciler;
+export type DuplicateKeyDiagnostic = RuntimeDuplicateKeyDiagnostic;
 export type HeadlessRenderer = RuntimeHeadlessRenderer;
 export type NativeRenderer = RuntimeNativeRenderer;
 export type Scheduler = RuntimeScheduler;

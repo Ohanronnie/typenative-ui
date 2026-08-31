@@ -27,6 +27,15 @@ function keyedTree(reversed: bool, changed: bool): Element {
   }
   return createFragmentElements(move children);
 }
+function duplicateKeyTree(): Element {
+  const children = new Array<Element>({
+    capacity: 3usize,
+  });
+  children.push(keyedText(7u64, "first"));
+  children.push(keyedText(7u64, "duplicate"));
+  children.push(keyedText(9u64, "unique"));
+  return createFragmentElements(move children);
+}
 function main(): i32 {
   let result = 0i32;
   {
@@ -58,6 +67,24 @@ function main(): i32 {
       const first = hostChildAt(root, 0usize);
       if (first === undefined || first!.textLength() !== 5usize) {
         result = 15i32;
+      }
+    }
+    if (result === 0i32) {
+      renderer.update(duplicateKeyTree());
+      if (renderer.duplicateKeyCount() !== 1usize || !renderer.hasDiagnostics()) {
+        result = 16i32;
+      }
+    }
+    if (result === 0i32) {
+      const diagnostic = renderer.duplicateKeyAt(0usize);
+      if (diagnostic === undefined || diagnostic!.parentIdentity === 0u64 || diagnostic!.key.kind !== 2i32 || diagnostic!.key.integer !== 7u64 || diagnostic!.firstIndex !== 0usize || diagnostic!.duplicateIndex !== 1usize) {
+        result = 17i32;
+      }
+    }
+    if (result === 0i32) {
+      renderer.update(keyedTree(false, false));
+      if (renderer.duplicateKeyCount() !== 0usize || renderer.hasDiagnostics()) {
+        result = 18i32;
       }
     }
     renderer.unmount();
