@@ -293,6 +293,7 @@ export class ElementNode implements Disposable {
   public visibleRangeChange?: (usize) => void;
   public mountedId: u64 | undefined;
   public generation: u64;
+  private mountedOwner: *mut u8;
   private componentIdentity: u64;
   private referencePointer: *mut ElementRef;
   public constructor(kind: i32, typeId: u64, key: Key, text: string, children: Array<Element >) {
@@ -336,6 +337,9 @@ export class ElementNode implements Disposable {
     this.visibleRangeChange = undefined;
     this.mountedId = undefined;
     this.generation = 0u64;
+    unsafe {
+      this.mountedOwner = nullPointer<u8>();
+    }
     this.componentIdentity = 0u64;
     unsafe {
       this.referencePointer = nullPointer<ElementRef>();
@@ -346,7 +350,7 @@ export class ElementNode implements Disposable {
       if (this.referencePointer !== nullPointer<ElementRef>()) {
         let reference = &mut * this.referencePointer;
         if (this.mountedId !== undefined) {
-          reference.detachIf(this.mountedId!, this.generation);
+          reference.detachIf(this.mountedOwner, this.mountedId!, this.generation);
         }
       }
     }
@@ -364,6 +368,9 @@ export class ElementNode implements Disposable {
     this.focused = false;
     this.mountedId = undefined;
     this.generation = 0u64;
+    unsafe {
+      this.mountedOwner = nullPointer<u8>();
+    }
     this.componentIdentity = 0u64;
     unsafe {
       this.referencePointer = nullPointer<ElementRef>();
@@ -374,6 +381,14 @@ export class ElementNode implements Disposable {
   }
   public setComponentIdentity(identity: u64): void {
     this.componentIdentity = identity;
+  }
+  public unsafe setMountIdentity(owner: *mut u8, nodeId: u64, generation: u64): void {
+    this.mountedOwner = owner;
+    this.mountedId = nodeId;
+    this.generation = generation;
+  }
+  public unsafe mountedOwnerPointer(): *mut u8 {
+    return this.mountedOwner;
   }
   public componentIdentityValue(): u64 {
     return this.componentIdentity;
@@ -429,9 +444,10 @@ export struct Element {
       return this.node.referenceAddress() === other.node.referenceAddress();
     }
   }
-  public setMountIdentity(nodeId: u64, generation: u64): void {
-    this.node.mountedId = nodeId;
-    this.node.generation = generation;
+  public unsafe setMountIdentity(owner: *mut u8, nodeId: u64, generation: u64): void {
+    unsafe {
+      this.node.setMountIdentity(owner, nodeId, generation);
+    }
   }
   public isComponent(): bool {
     return this.node.kind === kindFunction();
@@ -474,12 +490,12 @@ export struct Element {
       kind: this.node.key.kind, text: this.node.key.text.clone(), integer: this.node.key.integer, identity: this.node.key.identity,
     };
   }
-  public attachReference(nodeId: u64, generation: u64): void {
+  public unsafe attachReference(owner: *mut u8, nodeId: u64, generation: u64): void {
     unsafe {
       const pointer = this.node.referenceAddress();
       if (pointer !== nullPointer<ElementRef>()) {
         let reference = &mut * pointer;
-        reference.attach(nodeId, generation);
+        reference.attach(owner, nodeId, generation);
       }
     }
   }
@@ -489,7 +505,7 @@ export struct Element {
       if (pointer !== nullPointer<ElementRef>()) {
         let reference = &mut * pointer;
         if (this.node.mountedId !== undefined) {
-          reference.detachIf(this.node.mountedId!, this.node.generation);
+          reference.detachIf(this.node.mountedOwnerPointer(), this.node.mountedId!, this.node.generation);
         }
       }
     }
@@ -892,27 +908,38 @@ export struct Element {
 export type ElementChild = Element;
 export class ElementRef {
   private attached: bool;
+  private owner: *mut u8;
   private nodeId: u64;
   private generation: u64;
   public constructor() {
     this.attached = false;
+    unsafe {
+      this.owner = nullPointer<u8>();
+    }
     this.nodeId = 0u64;
     this.generation = 0u64;
   }
-  public attach(nodeId: u64, generation: u64): void {
+  public unsafe attach(owner: *mut u8, nodeId: u64, generation: u64): void {
     this.attached = true;
+    this.owner = owner;
     this.nodeId = nodeId;
     this.generation = generation;
   }
   public detach(): void {
     this.attached = false;
+    unsafe {
+      this.owner = nullPointer<u8>();
+    }
     this.nodeId = 0u64;
     this.generation = this.generation + 1u64;
   }
-  public detachIf(nodeId: u64, generation: u64): void {
-    if (this.attached && this.nodeId === nodeId && this.generation === generation) {
+  public unsafe detachIf(owner: *mut u8, nodeId: u64, generation: u64): void {
+    if (this.attached && this.owner === owner && this.nodeId === nodeId && this.generation === generation) {
       this.detach();
     }
+  }
+  public unsafe ownerEquals(owner: *mut u8): bool {
+    return this.attached && this.owner === owner;
   }
   public isAttached(): bool {
     return this.attached;

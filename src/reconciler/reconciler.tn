@@ -400,6 +400,11 @@ export class Reconciler implements Disposable {
   private hooks: HookRoot;
   private focusedIdentity: u64 | undefined;
   private duplicateKeyErrors: Array<DuplicateKeyDiagnostic>;
+  private ownerPointer(): *mut u8 {
+    unsafe {
+      return this as *mut Reconciler as *mut u8;
+    }
+  }
   public constructor() {
     this.root = leaf();
     this.mounted = false;
@@ -453,8 +458,10 @@ export class Reconciler implements Disposable {
     if (identity === undefined) {
       return id;
     }
-    element.setMountIdentity(identity!, this.treeGeneration);
-    element.attachReference(identity!, this.treeGeneration);
+    unsafe {
+      element.setMountIdentity(this.ownerPointer(), identity!, this.treeGeneration);
+      element.attachReference(this.ownerPointer(), identity!, this.treeGeneration);
+    }
     setNodeParent( &mut this.nodes, id, parent);
     if (emit) {
       this.mutations.push({
@@ -485,8 +492,10 @@ export class Reconciler implements Disposable {
     if (identity === undefined) {
       return id;
     }
-    next.setMountIdentity(identity!, this.treeGeneration);
-    next.attachReference(identity!, this.treeGeneration);
+    unsafe {
+      next.setMountIdentity(this.ownerPointer(), identity!, this.treeGeneration);
+      next.attachReference(this.ownerPointer(), identity!, this.treeGeneration);
+    }
     detachReferences(previous);
     this.mutations.push({
       kind: mutationReplace(), nodeId: id, replacementId: undefined, parentId: parent, fromIndex: index, toIndex: index,
@@ -529,8 +538,10 @@ export class Reconciler implements Disposable {
     if (identity === undefined) {
       return id;
     }
-    next.setMountIdentity(identity!, this.treeGeneration);
-    next.attachReference(identity!, this.treeGeneration);
+    unsafe {
+      next.setMountIdentity(this.ownerPointer(), identity!, this.treeGeneration);
+      next.attachReference(this.ownerPointer(), identity!, this.treeGeneration);
+    }
     if (!sameElement(previous, next)) {
       return this.replaceNode(previous, next, id, parent, index);
     }
